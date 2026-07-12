@@ -155,6 +155,22 @@ func TestGroupsRequiresPaired(t *testing.T) {
 	}
 }
 
+func TestHealthzUnauthenticated(t *testing.T) {
+	// /healthz must answer 200 with no token (platform health checks are anon).
+	h := New("secret", &fakeWA{paired: false, connected: false}).Handler()
+	rec := request(t, h, http.MethodGet, "/healthz", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("/healthz unauthenticated: got %d, want 200", rec.Code)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["status"] != "ok" {
+		t.Errorf("healthz status = %v, want ok", body["status"])
+	}
+}
+
 func TestStatus(t *testing.T) {
 	fwa := &fakeWA{paired: true, connected: false}
 	h := New("secret", fwa).Handler()

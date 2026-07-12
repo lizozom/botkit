@@ -65,10 +65,24 @@ func New(token string, wa WhatsApp) *Server {
 // Handler returns the routed http.Handler.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", s.handleHealthz) // unauthenticated liveness probe
 	mux.HandleFunc("/pair", s.auth(s.handlePair))
 	mux.HandleFunc("/status", s.auth(s.handleStatus))
 	mux.HandleFunc("/groups", s.auth(s.handleGroups))
 	return mux
+}
+
+// handleHealthz is an unauthenticated liveness probe for platform health checks
+// (e.g. Fly). It returns 200 as long as the process serves HTTP — it does NOT
+// gate on WhatsApp being connected, so an unpaired/reconnecting bot is not
+// restart-looped. Connection detail rides in the body for humans; use the
+// token-gated /status for a machine-readable readiness signal.
+func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":    "ok",
+		"paired":    s.wa.Paired(),
+		"connected": s.wa.Connected(),
+	})
 }
 
 func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {

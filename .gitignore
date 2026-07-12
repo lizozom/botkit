@@ -1,0 +1,17 @@
+# Local env / secrets
+.env
+*.env
+!.env.example
+
+# SQLite session/state DBs
+*.db
+*.db-shm
+*.db-wal
+
+# Build output
+/bin/
+*.test
+*.out
+
+# OS / editor
+.DS_Store

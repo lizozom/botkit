@@ -37,6 +37,7 @@ type Client struct {
 	sessionDB   *sql.DB
 	onConnected func()
 	onLoggedOut func(reason string)
+	onMessage   func(*events.Message)
 }
 
 // PendingRequest is a person asking to join a group. Phone is "" when the
@@ -371,5 +372,9 @@ func (c *Client) handleEvent(evt any) {
 		}
 	case *events.Disconnected:
 		slog.Warn("whatsapp: disconnected (auto-reconnect will retry)")
+	case *events.Message:
+		if c.onMessage != nil {
+			c.onMessage(v)
+		}
 	}
 }

@@ -123,6 +123,12 @@ func (b *Bot) dispatch(evt *events.Message) {
 	if evt.Info.IsFromMe {
 		return // never react to our own messages
 	}
+	// Run off whatsmeow's event goroutine: handlers (and the humanized send)
+	// can block for seconds, and must not stall the socket's event loop.
+	go b.handle(evt)
+}
+
+func (b *Bot) handle(evt *events.Message) {
 	chat := evt.Info.Chat
 	isGroup := chat.Server == types.GroupServer
 

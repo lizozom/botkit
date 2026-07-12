@@ -67,8 +67,10 @@ func main() {
 		return nil
 	})
 
-	// DMs, only from people already in a managed group — nudge them to the group.
+	// DMs from people already in a managed group — nudge them to the group.
+	// (Swap to bot.DMsFromAnyone for a quick standalone DM test.)
 	b.OnDirectMessage(bot.DMsFromMembers, func(ctx context.Context, msg bot.InboundMessage) error {
+		slog.Info("DM received", slog.String("from", msg.SenderName))
 		return msg.Reply(ctx, "hey — talk to me in the group 🙂")
 	})
 

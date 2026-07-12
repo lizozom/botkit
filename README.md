@@ -21,15 +21,20 @@ Design locked; implementation in progress.
 |---|---|---|
 | `redact` | one-way PII hashing for logs | ✅ done |
 | `telemetry` | OTLP-logs bootstrap (`Init`) | ✅ done |
-| `identity` | phone canonicalization (`Normalize`) | ✅ done (Phase 0); LID resolution → Phase 1 |
-| `transport` | whatsmeow connect/session/events | ⬜ Phase 1 |
-| `pairing` | manual pair flow + ops API | ⬜ Phase 1 |
-| `store` | session DB, metadata KV, run bookkeeping | ⬜ Phase 1/3 |
+| `identity` | phone canonicalization (`Normalize`) | ✅ done; LID resolution lives in `transport` |
+| `transport` | whatsmeow connect/session/pair/lifecycle | ✅ done (Phase 1) |
+| `pairing` | manual pair flow + ops API (`/pair`,`/status`,`/groups`) | ✅ done (Phase 1) |
+| `store` | session-DB open (`OpenSQLite`) | ✅ session open; metadata KV + run bookkeeping → Phase 3 |
 | `bot` | orchestrator, handlers, actions, envelope | ⬜ Phase 2 |
 | `send` | reactive `Reply` + error taxonomy | ⬜ Phase 2 |
 | `gate` | fail-closed group whitelist | ⬜ Phase 2 |
 | `schedule` | job kernel (jitter, idempotency) | ⬜ Phase 3 |
 | `webauth` | membership-gated dashboard auth | ⬜ Phase 3 |
+
+**Demo:** `cmd/hello` — opens a session, serves the pairing ops API, and
+connects to WhatsApp for real (manual pairing). See `cmd/hello/.env.example`.
+It does not reply to messages yet — that arrives with Phase 2 (`OnMessage` +
+`Reply`).
 
 ## Develop
 

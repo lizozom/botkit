@@ -48,9 +48,14 @@ type Bot struct {
 // New validates config and builds the bot. It does not touch the network —
 // call Run to open the session and go online.
 func New(cfg Config) (*Bot, error) {
-	groups, err := gate.ParseGroups(cfg.ManagedGroups)
-	if err != nil {
-		return nil, err
+	var groups *gate.Groups
+	if cfg.AllGroups {
+		groups = gate.AllowAll()
+	} else {
+		var err error
+		if groups, err = gate.ParseGroups(cfg.ManagedGroups); err != nil {
+			return nil, err
+		}
 	}
 	return &Bot{cfg: cfg, groups: groups}, nil
 }
@@ -84,7 +89,10 @@ func (b *Bot) Run(ctx context.Context) error {
 			slog.String("reason", reason))
 	})
 
-	if b.onGroup != nil && b.groups.Empty() {
+	switch {
+	case b.groups.AllowsAll():
+		slog.Warn("botkit: AllGroups is ON — the bot will respond in EVERY group the number belongs to (fail-open)")
+	case b.onGroup != nil && b.groups.Empty():
 		slog.Warn("botkit: OnGroupMessage registered but ManagedGroups is empty — the bot will act in NO groups")
 	}
 

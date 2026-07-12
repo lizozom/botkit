@@ -15,9 +15,21 @@ import (
 
 // Groups is a fail-closed whitelist of managed group JIDs. A nil or empty
 // Groups allows nothing — the bot acts in zero groups unless explicitly told.
+//
+// The one exception is AllowAll: a group set built by AllowAll() allows every
+// group. That is a deliberate, opt-in escape from fail-closed — use it only for
+// bots that genuinely must act everywhere (e.g. a transitional announcement/
+// apology bot), knowing it responds in every group the number belongs to.
 type Groups struct {
 	allowed map[string]bool
 	list    []types.JID
+	all     bool
+}
+
+// AllowAll returns a Groups that allows every group. Fail-OPEN — see the type
+// doc. Callers opt in explicitly.
+func AllowAll() *Groups {
+	return &Groups{all: true}
 }
 
 // ParseGroups builds a whitelist from JID strings (blanks skipped, dupes
@@ -51,13 +63,16 @@ func ParseGroups(jids []string) (*Groups, error) {
 }
 
 // Allows reports whether jid is a managed group. Fail-closed: false for a nil
-// receiver or an empty whitelist.
+// receiver or an empty whitelist. Always true when built by AllowAll.
 func (g *Groups) Allows(jid types.JID) bool {
 	if g == nil {
 		return false
 	}
-	return g.allowed[jid.String()]
+	return g.all || g.allowed[jid.String()]
 }
+
+// AllowsAll reports whether this set is in fail-open (all-groups) mode.
+func (g *Groups) AllowsAll() bool { return g != nil && g.all }
 
 // List returns the managed group JIDs.
 func (g *Groups) List() []types.JID {
@@ -67,7 +82,11 @@ func (g *Groups) List() []types.JID {
 	return g.list
 }
 
-// Empty reports whether the whitelist gates no groups at all.
+// Empty reports whether the whitelist gates no groups at all. An AllowAll set
+// is never empty.
 func (g *Groups) Empty() bool {
-	return g == nil || len(g.allowed) == 0
+	if g == nil {
+		return true
+	}
+	return !g.all && len(g.allowed) == 0
 }

@@ -38,6 +38,19 @@ func TestFailClosed(t *testing.T) {
 	}
 }
 
+func TestAllowAll(t *testing.T) {
+	g := AllowAll()
+	if !g.Allows(group("120363")) || !g.Allows(group("999999")) {
+		t.Error("AllowAll must allow any group")
+	}
+	if !g.AllowsAll() {
+		t.Error("AllowsAll should report true")
+	}
+	if g.Empty() {
+		t.Error("AllowAll must not be Empty")
+	}
+}
+
 func TestBadJID(t *testing.T) {
 	if _, err := ParseGroups([]string{"not a jid"}); err == nil {
 		t.Error("malformed JID must error")

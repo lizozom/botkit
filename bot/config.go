@@ -14,6 +14,12 @@ type Config struct {
 	// listed here are dropped before handlers run. Empty = no groups.
 	ManagedGroups []string
 
+	// AllGroups, when true, makes the bot act in EVERY group the number belongs
+	// to — a deliberate, fail-OPEN escape from the ManagedGroups whitelist.
+	// Use only for bots that must reach everywhere (e.g. a transitional
+	// announcement/apology bot). ManagedGroups is ignored when this is set.
+	AllGroups bool
+
 	// OpsAddr is the listen address for the private pairing ops API
 	// (/pair, /status, /groups). Empty disables the ops API. Keep it private —
 	// never expose this port publicly.

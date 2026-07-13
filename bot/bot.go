@@ -10,10 +10,13 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/lizozom/botkit/gate"
 	"github.com/lizozom/botkit/pairing"
+	"github.com/lizozom/botkit/store"
 	"github.com/lizozom/botkit/transport"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
@@ -38,11 +41,13 @@ type Bot struct {
 	cfg    Config
 	groups *gate.Groups
 	tp     *transport.Client
+	kv     *store.KV
 	ctx    context.Context
 
 	onGroup  Handler
 	onDM     Handler
 	dmPolicy DMPolicy
+	jobs     []scheduledJob
 }
 
 // New validates config and builds the bot. It does not touch the network —
@@ -81,8 +86,25 @@ func (b *Bot) Run(ctx context.Context) error {
 	}
 	b.tp = tp
 	tp.SetOnMessage(b.dispatch)
+
+	// Open the KV (scheduler idempotency, future webauth nonces) only if needed.
+	if len(b.jobs) > 0 {
+		kvPath := filepath.Join(filepath.Dir(b.cfg.SessionDBPath), "botkit_state.db")
+		kv, err := store.NewKV(kvPath)
+		if err != nil {
+			return fmt.Errorf("open state kv: %w", err)
+		}
+		b.kv = kv
+		defer func() { _ = b.kv.Close() }()
+	}
+
+	// Scheduled jobs start once, on first connect — never tick into a dead socket.
+	var startOnce sync.Once
 	tp.SetOnConnected(func() {
 		slog.Info("botkit: connected", slog.String("self", tp.SelfJID().String()))
+		if len(b.jobs) > 0 {
+			startOnce.Do(func() { b.startJobs(ctx) })
+		}
 	})
 	tp.SetOnLoggedOut(func(reason string) {
 		slog.Error("botkit: session lost — manual re-pair required (no auto-pair)",

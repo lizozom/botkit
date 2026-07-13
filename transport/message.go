@@ -53,6 +53,12 @@ func humanizeDelay() time.Duration {
 	return 2*time.Second + time.Duration(rand.IntN(5000))*time.Millisecond
 }
 
+// approvePause is a short humanized delay [1s, 3s) before a group approval, so
+// a batch of admits doesn't fire in one machine-instant burst.
+func approvePause(ctx context.Context) {
+	sleepCtx(ctx, time.Second+time.Duration(rand.IntN(2000))*time.Millisecond)
+}
+
 func sleepCtx(ctx context.Context, d time.Duration) {
 	select {
 	case <-time.After(d):

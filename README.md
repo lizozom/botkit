@@ -89,8 +89,16 @@ b.OnGroupMessage(func(ctx context.Context, msg bot.InboundMessage) error {
 })
 ```
 
-Scheduled jobs (`OnSchedule` — join-request gatekeeper, audits, syncs) and the
-membership-gated dashboard login (`webauth`) are Phase 3, landing next. See
+Scheduled jobs are available via `OnSchedule` (join-request gatekeeper, audits,
+syncs) — `Every` / `EveryJittered` / `DailyAt`, jittered + staggered + connected-
+gated, with once-per-day idempotency across restarts:
+
+```go
+b.OnSchedule("gatekeeper", schedule.EveryJittered(5*time.Minute, 2*time.Minute), sweepFn)
+b.OnSchedule("audit", schedule.DailyAt(9, "Asia/Jerusalem"), auditFn)
+```
+
+The membership-gated dashboard login (`webauth`) is Phase 3b, next. See
 [`docs/examples.md`](docs/examples.md) for the full envelope, DM policies, and
 the AMIT gatekeeper shape.
 
@@ -105,12 +113,12 @@ Design locked; implementation in progress.
 | `identity` | phone canonicalization (`Normalize`) | ✅ done; LID resolution lives in `transport` |
 | `transport` | whatsmeow connect/session/pair/lifecycle | ✅ done (Phase 1) |
 | `pairing` | manual pair flow + ops API (`/pair`,`/status`,`/groups`) | ✅ done (Phase 1) |
-| `store` | session-DB open (`OpenSQLite`) | ✅ session open; metadata KV + run bookkeeping → Phase 3 |
+| `store` | session-DB open + metadata KV | ✅ done (`OpenSQLite`, `KV`) |
 | `bot` | orchestrator, `OnGroupMessage`/`OnDirectMessage`, envelope | ✅ done (Phase 2) |
 | `send` | `Reply` error taxonomy (`ErrBotWide`/`ErrPeerUnreachable`) | ✅ done (Phase 2) |
 | `gate` | fail-closed group whitelist | ✅ done (Phase 2) |
-| `schedule` | job kernel (jitter, idempotency) | ⬜ Phase 3 |
-| `webauth` | membership-gated dashboard auth | ⬜ Phase 3 |
+| `schedule` | job kernel (jitter, daily idempotency) | ✅ done (Phase 3a) |
+| `webauth` | membership-gated dashboard auth | ⬜ Phase 3b |
 
 **Demo:** `cmd/hello` — a real reply bot in ~90 lines. Connects to WhatsApp
 (manual pairing), replies `pong` to `ping` in a managed group, and nudges

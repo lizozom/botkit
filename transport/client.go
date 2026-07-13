@@ -277,11 +277,14 @@ func (c *Client) PendingRequests(ctx context.Context, group types.JID) ([]Pendin
 	return out, nil
 }
 
-// Approve admits the given requesters to a group.
+// Approve admits the given requesters to a group. It pauses briefly first
+// (humanized) so a batch of approvals doesn't land in one machine-instant
+// flurry — the same anti-abuse hygiene as the send path.
 func (c *Client) Approve(ctx context.Context, group types.JID, requesters []types.JID) error {
 	if len(requesters) == 0 {
 		return nil
 	}
+	approvePause(ctx)
 	_, err := c.wm.UpdateGroupRequestParticipants(ctx, group, requesters, whatsmeow.ParticipantChangeApprove)
 	if err != nil {
 		return fmt.Errorf("approve participants: %w", err)

@@ -98,6 +98,17 @@ b.OnSchedule("gatekeeper", schedule.EveryJittered(5*time.Minute, 2*time.Minute),
 b.OnSchedule("audit", schedule.DailyAt(9, "Asia/Jerusalem"), auditFn)
 ```
 
+Pairing never happens automatically. Register `OnPairingLost` to alert a human the
+moment the session has no usable pairing (never paired at boot, or logged out
+later), and call `AllGroups` to discover every joined group's name/admin
+status/community linkage (not just the managed whitelist):
+
+```go
+b.OnPairingLost(func(reason string) {
+	notifyAdmin("bot needs pairing (%s)", reason)
+})
+```
+
 The membership-gated dashboard login (`webauth`) is Phase 3b, next. See
 [`docs/examples.md`](docs/examples.md) for the full envelope, DM policies, and
 the AMIT gatekeeper shape.

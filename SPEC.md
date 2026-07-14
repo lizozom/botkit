@@ -182,6 +182,11 @@ Handlers call these; each WhatsApp write carries its hygiene inside:
 | `GroupMembers(ctx, group)` | live participant list |
 | `IsMember(ctx, group, identity)` | live membership check (used by `webauth`, §9) |
 | `ManagedGroups()` | the configured JID whitelist |
+| `AllGroups(ctx)` | every joined group (not just managed) — name, admin, member count, community linkage; for onboarding/diagnostics, not gating |
+
+`OnPairingLost(fn func(reason string))`, registered before `Run`, fires once whenever the
+session has no usable pairing — never paired at boot, or logged out later — so an app can
+alert a human instead of hand-polling the ops API's `/status`.
 
 ## 7. The send surface (the ban guardrail)
 

@@ -14,6 +14,10 @@ type JoinRequest = transport.PendingRequest
 // Member is a current group participant.
 type Member = transport.Member
 
+// Group is a joined group's metadata: name, admin status, member count, and
+// community linkage.
+type Group = transport.GroupSummary
+
 // These are the guarded WhatsApp action methods (SPEC §6.3). Handlers —
 // typically OnSchedule jobs — call them to do group work. Each WhatsApp write
 // carries its anti-abuse hygiene inside. They are valid once the bot is
@@ -23,6 +27,14 @@ type Member = transport.Member
 // ManagedGroups returns the configured managed group JIDs. Empty in AllGroups
 // mode (there is no finite list to enumerate).
 func (b *Bot) ManagedGroups() []types.JID { return b.groups.List() }
+
+// AllGroups returns every group the account has joined — not just the managed
+// ones — with name, admin status, member count, and community linkage. Use it
+// for onboarding (picking JIDs for ManagedGroups) or diagnostics; gating
+// decisions should still go through ManagedGroups/Allows, not this.
+func (b *Bot) AllGroups(ctx context.Context) ([]Group, error) {
+	return b.tp.AllGroups(ctx)
+}
 
 // PendingJoinRequests lists people awaiting approval for a group, with phones
 // resolved. Guarded by 429 backoff.

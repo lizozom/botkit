@@ -44,10 +44,11 @@ type Bot struct {
 	kv     *store.KV
 	ctx    context.Context
 
-	onGroup  Handler
-	onDM     Handler
-	dmPolicy DMPolicy
-	jobs     []scheduledJob
+	onGroup       Handler
+	onDM          Handler
+	dmPolicy      DMPolicy
+	jobs          []scheduledJob
+	onPairingLost func(reason string)
 }
 
 // New validates config and builds the bot. It does not touch the network —
@@ -74,6 +75,14 @@ func (b *Bot) OnDirectMessage(policy DMPolicy, fn Handler) {
 	b.dmPolicy = policy
 	b.onDM = fn
 }
+
+// OnPairingLost registers a callback fired the moment the bot has no usable
+// WhatsApp session: either there was never a saved session at boot, or an
+// existing one was logged out (device unlinked, or by WhatsApp itself). Fires
+// once per loss — botkit never re-pairs on its own, so an app typically uses
+// this to alert a human. Not registering this leaves pairing loss visible only
+// in logs.
+func (b *Bot) OnPairingLost(fn func(reason string)) { b.onPairingLost = fn }
 
 // Run opens the session, wires the ops API, connects (or idles if unpaired),
 // dispatches messages, and blocks until ctx is cancelled.
@@ -109,6 +118,9 @@ func (b *Bot) Run(ctx context.Context) error {
 	tp.SetOnLoggedOut(func(reason string) {
 		slog.Error("botkit: session lost — manual re-pair required (no auto-pair)",
 			slog.String("reason", reason))
+		if b.onPairingLost != nil {
+			b.onPairingLost(reason)
+		}
 	})
 
 	switch {
@@ -133,6 +145,9 @@ func (b *Bot) Run(ctx context.Context) error {
 	switch err := tp.Connect(ctx); {
 	case errors.Is(err, transport.ErrNotPaired):
 		slog.Warn("botkit: not paired — trigger pairing via POST /pair")
+		if b.onPairingLost != nil {
+			b.onPairingLost("not paired")
+		}
 	case err != nil:
 		return fmt.Errorf("connect: %w", err)
 	default:

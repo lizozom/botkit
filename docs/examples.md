@@ -137,6 +137,36 @@ func main() {
 The overlap guard, jitter, connected-gating, and daily-once idempotency are all handled by
 `OnSchedule` — none of AMIT's hand-rolled `runLoop` / `sync.Once` / run-bookkeeping survives.
 
+### Alerting on pairing loss
+
+botkit never re-pairs itself, so an app that wants a human notified — instead of just a log
+line — registers `OnPairingLost` before calling `Run`. It fires once whenever the session has
+no usable pairing: there was never one at boot, or an existing one got logged out later
+(device unlinked, or by WhatsApp). This replaces a hand-rolled poll of the ops API's
+`/status` endpoint with the event straight from the source:
+
+```go
+b.OnPairingLost(func(reason string) {
+    mail.Adminf("bot needs pairing (%s) — POST /pair, then enter the code on the phone", reason)
+})
+```
+
+### Discovering groups (`AllGroups`)
+
+`ManagedGroups()` only returns the configured whitelist. To discover JIDs in the first place
+— or build an onboarding/admin view — call `AllGroups`, which returns every joined group
+with name, admin status, member count, and community linkage:
+
+```go
+groups, err := b.AllGroups(ctx)
+for _, g := range groups {
+    fmt.Printf("%-30q %s admin=%v community=%v\n", g.Name, g.JID, g.IsAdmin, g.IsCommunity)
+}
+```
+
+Like the other action methods, it's valid once the bot is connected (i.e. from within a
+running handler or after `Run` has started) — it does not itself trigger pairing.
+
 ---
 
 ## Example 3 — travel-expenses

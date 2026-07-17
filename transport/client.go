@@ -367,18 +367,26 @@ func selfIsAdmin(info *types.GroupInfo, self, selfLID types.JID) bool {
 // participantIsSelf matches the bot's own identity against a participant across
 // its phone/LID forms — the bot may be addressed either way, so both of the
 // bot's own forms are checked against each of the participant's forms.
+//
+// Each match requires the same JID Server, not just the same User. A phone
+// number and a LID are different namespaces that happen to both be numeric, so
+// on the User alone a stranger's LID can collide with the bot's phone number
+// (or vice versa) and the bot would either skip a real member or flag itself.
 func participantIsSelf(p types.GroupParticipant, self, selfLID types.JID) bool {
 	if (self.IsEmpty() || self.User == "") && selfLID.IsEmpty() {
 		return false
 	}
+	sameJID := func(a, b types.JID) bool {
+		return !a.IsEmpty() && !b.IsEmpty() && a.User == b.User && a.Server == b.Server
+	}
 	switch {
-	case !self.IsEmpty() && !p.JID.IsEmpty() && p.JID.User == self.User:
+	case !self.IsEmpty() && sameJID(p.JID, self):
 		return true
-	case !self.IsEmpty() && !p.PhoneNumber.IsEmpty() && p.PhoneNumber.User == self.User:
+	case !self.IsEmpty() && sameJID(p.PhoneNumber, self):
 		return true
-	case !selfLID.IsEmpty() && !p.JID.IsEmpty() && p.JID.User == selfLID.User:
+	case !selfLID.IsEmpty() && sameJID(p.JID, selfLID):
 		return true
-	case !selfLID.IsEmpty() && !p.LID.IsEmpty() && p.LID.User == selfLID.User:
+	case !selfLID.IsEmpty() && sameJID(p.LID, selfLID):
 		return true
 	}
 	return false

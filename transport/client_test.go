@@ -44,6 +44,27 @@ func TestParticipantIsSelf_MatchesPhoneForm(t *testing.T) {
 	}
 }
 
+// A phone number and a LID are separate namespaces that are both just digits,
+// so the same numeric User can appear in each as two different people. Matching
+// on User alone made a stranger whose LID happens to equal the bot's phone
+// number (or vice versa) read as the bot — skipping a real member from an audit,
+// or flagging the bot as a stranger.
+func TestParticipantIsSelf_SameUserDifferentServerIsNotSelf(t *testing.T) {
+	self := phone("972333333333") // bot's phone-form identity
+	// A stranger addressed by a LID whose numeric part collides with the phone.
+	stranger := types.GroupParticipant{JID: lid("972333333333")}
+	if participantIsSelf(stranger, self, types.JID{}) {
+		t.Error("a LID must not match the bot's phone JID just because the digits coincide")
+	}
+
+	// And the mirror: bot known only by its LID, a stranger's phone collides.
+	selfLID := lid("55554444")
+	stranger2 := types.GroupParticipant{JID: phone("55554444")}
+	if participantIsSelf(stranger2, types.JID{}, selfLID) {
+		t.Error("a phone JID must not match the bot's LID just because the digits coincide")
+	}
+}
+
 // Approving is the one call that actually lets someone into a group, so a
 // refusal read as success strands them: callers record "admitted" and never
 // reconsider.

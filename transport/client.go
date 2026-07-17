@@ -280,16 +280,42 @@ func (c *Client) PendingRequests(ctx context.Context, group types.JID) ([]Pendin
 // Approve admits the given requesters to a group. It pauses briefly first
 // (humanized) so a batch of approvals doesn't land in one machine-instant
 // flurry — the same anti-abuse hygiene as the send path.
+//
+// A per-participant refusal is an error, never a success: callers act on
+// "approved" once and never revisit it, so claiming it wrongly strands someone
+// outside forever. Claiming the reverse costs a retry that finds nothing to do.
 func (c *Client) Approve(ctx context.Context, group types.JID, requesters []types.JID) error {
 	if len(requesters) == 0 {
 		return nil
 	}
 	approvePause(ctx)
-	_, err := c.wm.UpdateGroupRequestParticipants(ctx, group, requesters, whatsmeow.ParticipantChangeApprove)
+	results, err := c.wm.UpdateGroupRequestParticipants(ctx, group, requesters, whatsmeow.ParticipantChangeApprove)
 	if err != nil {
 		return fmt.Errorf("approve participants: %w", err)
 	}
+	if err := participantErrors(results); err != nil {
+		return fmt.Errorf("approve participants: %w", err)
+	}
 	return nil
+}
+
+// participantErrors reports whoever WhatsApp refused in its per-participant
+// reply; Error == 0 means it attached no code, i.e. that one went through. It
+// speaks only for participants WhatsApp mentioned — stated refusals, not silence.
+//
+// Defensive: whatsmeow documents these codes for *adding* participants, and no
+// approve has been seen refused this way. Don't drop a safety net for it.
+func participantErrors(results []types.GroupParticipant) error {
+	var refused []string
+	for _, p := range results {
+		if p.Error != 0 {
+			refused = append(refused, fmt.Sprintf("%s: error %d", p.JID, p.Error))
+		}
+	}
+	if len(refused) == 0 {
+		return nil
+	}
+	return fmt.Errorf("refused by whatsapp: %s", strings.Join(refused, "; "))
 }
 
 // membersFrom resolves a participant list to Members (no network calls — phone

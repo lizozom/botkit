@@ -15,9 +15,9 @@ var DefaultCountryCode = "972"
 // Normalize returns a canonical phone key: digits only, no "+", with a national
 // leading "0" replaced by DefaultCountryCode. Returns "" for empty/garbage.
 //
-//	"054-626-0906"   -> "972546260906"
-//	"+972546260906"  -> "972546260906"
-//	"972546260906"   -> "972546260906"
+//	"050-000-0001"   -> "972500000001"
+//	"+972500000001"  -> "972500000001"
+//	"972500000001"   -> "972500000001"
 func Normalize(raw string) string {
 	var b strings.Builder
 	for _, r := range raw {

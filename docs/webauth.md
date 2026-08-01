@@ -117,6 +117,33 @@ b.OnGroupMessage(func(ctx context.Context, msg bot.InboundMessage) error {
 That is the entire bot-side integration. Nonce generation, storage, expiry,
 single-use enforcement, and the membership check all live inside `webauth`.
 
+**The literal `"dashboard"` is just one way to trigger this.** `MintLink` has no
+opinion about what decided to call it — a keyword, a regex, a slash-command, or
+an LLM agent concluding from "how do I see last month's receipts?" that the
+person wants the dashboard. A tool-calling agent can expose minting as a tool
+and let the model invoke it:
+
+```go
+// A ReAct-style agent decides; MintLink is just the tool it reaches for.
+if intent := agent.Classify(ctx, msg.Text); intent == "wants_dashboard" {
+	link, err := b.WebAuth().MintLink(ctx, msg.GroupJID, msg.SenderJID)
+	if err != nil {
+		return err
+	}
+	return msg.Reply(ctx, "Here you go (15 min): "+link)
+}
+```
+
+Two constraints hold no matter what does the deciding:
+
+- **It must stay reactive.** `Reply` is botkit's only send path (SPEC §7), so a
+  link can only go out in response to an inbound message. An agent cannot decide
+  to hand someone a link out of the blue.
+- **The agent's judgment is not a security boundary.** A model tricked into
+  minting a link for the wrong person still produces a link that only works if
+  that person is in the group — the live check at redeem does not care who or
+  what asked for it. Prompt-injecting the agent gains an attacker nothing here.
+
 Pass the typed `msg.GroupJID` / `msg.SenderJID`, not `msg.GroupID` /
 `msg.SenderPhone`. Membership keys on the JID so that LID-only participants —
 people whose phone number the bot cannot see — can still log in; `SenderPhone`

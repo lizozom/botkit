@@ -223,6 +223,12 @@ no business in — noisy, and a fast track to a ban.
 Replaces the old `personas.md` allowlist + DM-OTP flow. Authorization is **live group
 membership**, and login is an **in-group reply** (no DM → no non-reply send).
 
+What triggers a mint is the app's business: a keyword, a regex, or an LLM agent inferring the
+intent and calling `MintLink` as a tool. The trigger is never a security boundary — an agent
+talked into minting for the wrong person still produces a link that fails the live membership
+check at redeem. The one invariant is that minting stays **reactive** (§7): a link can only
+ride out on a reply to an inbound message.
+
 ### Flow
 
 ```

@@ -40,10 +40,6 @@ type Config struct {
 	// ignore media.
 	AcceptMedia bool
 
-	// ServiceName / ServiceVersion label telemetry. Optional.
-	//
-	// Currently inert: bot never calls telemetry.Init, so an app wires
-	// telemetry itself and passes these directly. See SPEC §15.
-	ServiceName    string
-	ServiceVersion string
+	// Telemetry is not configured here. The app calls telemetry.Init itself
+	// with its own service name and version — see SPEC §13.
 }

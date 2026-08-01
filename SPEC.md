@@ -99,7 +99,6 @@ b := bot.New(bot.Config{
     SessionDBPath: "/data/whatsapp_session.db",
     BotPhone:      cfg.Phone,          // for manual pairing only
     ManagedGroups: cfg.ManagedGroups,  // fail-closed JID whitelist (required, §8)
-    ServiceName:   cfg.ServiceName,    // labels telemetry (see §15 — no OTLP knob yet)
     OpsAddr:       ":8080",            // ops API + webauth redeem (localhost only)
     OpsToken:      cfg.PairToken,      // bearer for ops API
     AcceptMedia:   true,               // deliver media to OnMessage (default false)
@@ -373,6 +372,8 @@ app's source of truth.
 
 - `telemetry.Init(ctx, service, version)` — OTLP-logs bootstrap, no-op when
   `OTEL_EXPORTER_OTLP_ENDPOINT` is unset. Extracted verbatim.
+- **The app calls `Init`**, not `bot.Run` — it owns its service name, its version, and the
+  shutdown flush. `bot.Config` therefore carries no telemetry fields at all.
 - **Event emission stays app-side** — nagger's ~20 typed events and AMIT's single `Audit`
   event are domain vocabularies, not framework concerns. `botkit` provides the transport and
   `redact` helpers; the app defines its events.
@@ -392,14 +393,6 @@ app's source of truth.
 
 ## 15. Open / deferred
 
-- **Telemetry config is inert.** This spec has always shown an `OTLP:` field on `bot.Config`
-  that was never implemented. Worse, the two fields that do exist —
-  `Config.ServiceName`/`ServiceVersion` — are never read by anything: `bot` never calls
-  `telemetry.Init`, so an app must call it itself (as `cmd/hello` does) and pass the service
-  name directly. Setting them on `bot.Config` today does nothing. Open: either have `Run`
-  call `telemetry.Init` and give it an endpoint knob, or drop both fields and document
-  telemetry as wholly app-owned (`OTEL_EXPORTER_OTLP_ENDPOINT` + a direct `telemetry.Init`
-  call), which is what actually happens now.
 - Telegram transport (the handler API is already transport-neutral to accommodate it).
 - Tier-2 `SendDM` and tier-3 proactive sending — only if a consumer needs them, and only
   through the guardrails in §7.

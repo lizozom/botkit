@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer run on the same branch makes the older one irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          # Track the toolchain go.mod asks for, so CI cannot silently drift
+          # onto a newer Go than the module declares.
+          go-version-file: go.mod
+          cache: true
+
+      - name: go build
+        run: go build ./...
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: gofmt
+        run: |
+          # gofmt exits 0 even when it reformats, so check for output instead.
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt'd:"
+            echo "$unformatted"
+            echo
+            gofmt -d .
+            exit 1
+          fi
+
+      - name: go test
+        # -race matters here: webauth's single-use guarantee and the scheduler
+        # are both concurrency claims, and their tests spawn racing goroutines.
+        run: go test -race -count=1 ./...

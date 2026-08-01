@@ -61,7 +61,7 @@ func isBotWide(err error) bool {
 // wrapper) surface for a broken session. Add new wordings as they show up.
 var botWideMarkers = []string{
 	"the store doesn't contain a device JID", // whatsmeow when Store.ID == nil
-	"device JID missing",                      // our own Ping wrapper
-	"not paired yet",                          // our own guard
-	"websocket not connected",                 // whatsmeow socket layer
+	"device JID missing",                     // our own Ping wrapper
+	"not paired yet",                         // our own guard
+	"websocket not connected",                // whatsmeow socket layer
 }

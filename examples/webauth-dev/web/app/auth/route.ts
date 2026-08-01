@@ -1,9 +1,7 @@
-// GET /auth?t=<nonce> — the magic link's landing route.
-//
-// This is the whole dashboard-side redeem: hand the nonce to the bot, set what
-// comes back as an httpOnly cookie. The dashboard never validates the nonce,
-// never looks at group membership, and never sees the signing key used to mint.
-// Copy this file into a real app almost verbatim.
+// GET /auth?t=<nonce> — the magic link's landing route, and the whole
+// dashboard-side redeem: hand the nonce to the bot, set what comes back as an
+// httpOnly cookie. The dashboard never validates the nonce or looks at group
+// membership. Copy into a real app almost verbatim.
 
 import { NextResponse } from "next/server";
 
@@ -28,12 +26,12 @@ export async function GET(req: Request) {
       cache: "no-store",
     });
   } catch {
-    // Bot unreachable. Deny — a down membership check is never an open door.
+    // Bot unreachable — a down membership check is never an open door.
     return NextResponse.redirect(denied);
   }
 
-  // 403 covers every failure: expired link, already redeemed, not a member.
-  // The bot deliberately does not say which, so neither can we.
+  // One 403 covers expired, already-redeemed, and not-a-member. The bot does
+  // not say which, so neither can we.
   if (!res.ok) return NextResponse.redirect(denied);
 
   const { session } = (await res.json()) as { session: string };
@@ -41,8 +39,7 @@ export async function GET(req: Request) {
   const out = NextResponse.redirect(new URL("/dashboard", req.url));
   out.cookies.set("session", session, {
     httpOnly: true,
-    // Secure is off here only because the harness runs on http://localhost.
-    // Turn it on in anything reachable over a network.
+    // Off only because the harness is http://localhost. On anywhere else.
     secure: false,
     sameSite: "lax",
     path: "/",

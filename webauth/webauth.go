@@ -1,15 +1,12 @@
 // Package webauth implements membership-gated magic-link auth for a companion
-// dashboard: MintLink (called from a message handler, replied in-group), a
-// single-use nonce store, Redeem (live IsMember check -> signed session token),
-// Refresh (re-check + re-mint), and the /webauth/* endpoints.
+// dashboard: MintLink, Redeem, Refresh, and the /webauth/* endpoints.
 //
-// See ../SPEC.md §9 for the design and ../docs/webauth.md for consumer setup.
+// Three properties carry the security model: membership is checked live at
+// redeem and every refresh, never trusted from the link; the nonce is consumed
+// atomically, so a link redeems exactly once; and every failure looks identical
+// to the caller, so the endpoints are not a membership oracle.
 //
-// The whole security model rests on three properties, in descending order of
-// importance: membership is verified live at redeem and at every refresh, never
-// trusted from the link; the nonce is consumed atomically so a link redeems
-// exactly once; and every failure looks identical to the caller, so the
-// endpoints cannot be used as a membership oracle.
+// See ../SPEC.md §9 for the design, ../docs/webauth.md for setup.
 package webauth
 
 import (
@@ -29,11 +26,9 @@ import (
 // noncePrefix namespaces magic-link nonces inside the shared botkit KV.
 const noncePrefix = "webauth:nonce:"
 
-// ErrDenied is the single error every failure path returns: expired nonce,
-// already-redeemed nonce, forged token, expired session, member no longer in
-// the group. Callers cannot tell these apart, and that is the point — a
-// distinguishable error would let anyone holding a dead nonce probe whether a
-// given person is in a group. Operators get the real reason from the logs.
+// ErrDenied is the only error any failure path returns — expired, replayed,
+// forged, not-a-member, all identical. A distinguishable error would let a
+// prober learn who is in a group. Real reasons go to the logs.
 var ErrDenied = errors.New("webauth: denied")
 
 // Membership is the live authorization check webauth depends on. *bot.Bot's
@@ -57,8 +52,8 @@ type nonceRecord struct {
 	Expires int64  `json:"exp"`
 }
 
-// New validates cfg and returns an Auth. It fails fast on a missing secret
-// rather than deferring to the first login attempt.
+// New validates cfg and returns an Auth, failing fast on a missing secret
+// rather than at someone's first login.
 func New(cfg Config, kv *store.KV, mem Membership) (*Auth, error) {
 	full, err := cfg.withDefaults()
 	if err != nil {
@@ -73,20 +68,18 @@ func New(cfg Config, kv *store.KV, mem Membership) (*Auth, error) {
 	return &Auth{cfg: full, kv: kv, mem: mem, clock: time.Now}, nil
 }
 
-// MintLink issues a magic link authorizing member to open the dashboard for
-// group, and returns the full URL to reply with in-group.
+// MintLink returns a magic-link URL to reply with in-group.
 //
-// It deliberately does not check that member is in group: the check that counts
-// runs live at redeem, and a second one here would only add a WhatsApp query
-// per mint while proving nothing about the state at redeem time.
+// It does not check that member is in group. The check that counts runs live at
+// redeem; one here would cost a WhatsApp query per mint and prove nothing about
+// the state at redeem time.
 func (a *Auth) MintLink(ctx context.Context, group, member types.JID) (string, error) {
 	if group.IsEmpty() || member.IsEmpty() || member.User == "" {
 		return "", errors.New("webauth: MintLink needs both a group and a member JID")
 	}
 
-	// Piggyback nonce GC on mint: links are minted far more often than they are
-	// redeemed, so without this the unredeemed ones accumulate forever. Old
-	// enough to be past LinkTTL means old enough to be unusable.
+	// GC on mint: links are minted far more often than redeemed, so unredeemed
+	// ones would accumulate forever. Past LinkTTL means unusable anyway.
 	if n, err := a.kv.DeleteExpired(ctx, noncePrefix, a.cfg.LinkTTL); err != nil {
 		slog.Warn("webauth: nonce sweep failed", slog.String("err", err.Error()))
 	} else if n > 0 {
@@ -123,10 +116,9 @@ func (a *Auth) Redeem(ctx context.Context, nonce string) (string, error) {
 	}
 	key := noncePrefix + nonce
 
-	// Consume first. This is the single-use gate, and it must happen before any
-	// other check: bailing out early on an expired nonce would leave the record
-	// behind, and a Get-then-Delete would let two concurrent redemptions of one
-	// link both succeed.
+	// Consume first — this is the single-use gate. Checking expiry before
+	// consuming would leave the record behind; a Get-then-Delete would let two
+	// concurrent taps of one link both succeed.
 	var (
 		raw string
 		ok  bool
@@ -175,9 +167,8 @@ func (a *Auth) Redeem(ctx context.Context, nonce string) (string, error) {
 }
 
 // Refresh re-checks membership and re-mints an expiring session token. The
-// presented token must carry a valid signature and still be inside its absolute
-// ceiling; its own expiry is allowed to have passed, since that is the very
-// condition Refresh exists to resolve.
+// token must be validly signed and inside its absolute ceiling; its own expiry
+// may have passed, which is the condition Refresh exists to resolve.
 func (a *Auth) Refresh(ctx context.Context, token string) (string, error) {
 	claims, err := a.parse(token)
 	if err != nil {
@@ -202,14 +193,12 @@ func (a *Auth) Refresh(ctx context.Context, token string) (string, error) {
 	if err := a.assertMember(ctx, group, member, "refresh"); err != nil {
 		return "", err
 	}
-	// The ceiling rides through unchanged — that is what stops refresh from
-	// being an unbounded renewal.
+	// The ceiling rides through unchanged, so refresh is not unbounded renewal.
 	return a.mint(group, member, now, time.Unix(claims.Absolute, 0))
 }
 
-// Verify checks a token's signature and expiry without a membership query. The
-// dashboard normally verifies locally with the shared key; this exists for
-// callers that would rather ask the bot.
+// Verify checks signature and expiry without a membership query. The dashboard
+// normally verifies locally; this is for callers that would rather ask the bot.
 func (a *Auth) Verify(token string) (Claims, error) {
 	claims, err := a.parse(token)
 	if err != nil {
@@ -222,12 +211,11 @@ func (a *Auth) Verify(token string) (Claims, error) {
 	return claims, nil
 }
 
-// TTL is the lifetime of a freshly minted session token, for the expires_in
-// field the endpoints report.
+// TTL is a fresh token's lifetime, reported as expires_in.
 func (a *Auth) TTL() time.Duration { return a.cfg.RecheckInterval }
 
-// assertMember runs the live membership check. A failed query denies: an
-// unreachable WhatsApp must not become an open door.
+// assertMember runs the live check. A failed query denies — an unreachable
+// WhatsApp must not become an open door.
 func (a *Auth) assertMember(ctx context.Context, group, member types.JID, stage string) error {
 	in, err := a.mem.IsMember(ctx, group, member)
 	if err != nil {
@@ -242,8 +230,8 @@ func (a *Auth) assertMember(ctx context.Context, group, member types.JID, stage 
 	return nil
 }
 
-// mint signs a session token valid for RecheckInterval, carrying absolute as
-// the unmoving ceiling on the whole login.
+// mint signs a token valid for RecheckInterval, carrying absolute as the
+// unmoving ceiling on the whole login.
 func (a *Auth) mint(group, member types.JID, now, absolute time.Time) (string, error) {
 	return a.sign(Claims{
 		Group:    group.String(),

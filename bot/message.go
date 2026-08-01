@@ -36,10 +36,9 @@ type InboundMessage struct {
 	SenderName  string
 
 	// SenderJID and GroupJID are the typed identities behind SenderPhone and
-	// GroupID. Prefer them for any authorization decision (webauth membership,
-	// per-person state): unlike SenderPhone they are always populated, so
-	// LID-only participants — people whose phone the bot cannot see — are not
-	// silently locked out. GroupJID is the zero JID for a DM.
+	// GroupID. Prefer them for authorization: unlike SenderPhone they are always
+	// populated, so LID-only participants are not silently locked out. GroupJID
+	// is the zero JID for a DM.
 	SenderJID types.JID
 	GroupJID  types.JID
 

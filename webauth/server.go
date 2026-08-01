@@ -6,16 +6,12 @@ import (
 	"net/http"
 )
 
-// Handler returns the /webauth/* routes, mounted by the bot on the private ops
-// port next to the pairing API.
+// Handler returns the /webauth/* routes, mounted on the private ops port next
+// to the pairing API.
 //
-// Security model, in layers, mirroring package pairing:
-//   - The port is never exposed publicly. The dashboard reaches it over
-//     localhost, so these endpoints have no route from the internet and a
-//     nonce cannot be guessed at from outside.
-//   - Every request needs `Authorization: Bearer <APIToken>` (constant-time
-//     compare).
-//   - Every rejection is an identical opaque 403 — see ErrDenied.
+// Layered like package pairing: the port is never public (so a nonce cannot be
+// guessed at from outside), every request needs a constant-time-compared bearer
+// token, and every rejection is an identical opaque 403 — see ErrDenied.
 func (a *Auth) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/webauth/redeem", a.auth(a.handleRedeem))
@@ -67,16 +63,14 @@ func (a *Auth) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	writeSession(w, token, int(a.TTL().Seconds()))
 }
 
-// decode enforces POST and reads a small JSON body. A malformed body is denied
-// rather than described, so probing with junk yields the same 403 as everything
-// else.
+// decode enforces POST and reads a small JSON body. Malformed input is denied,
+// not described, so junk yields the same 403 as everything else.
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	if r.Method != http.MethodPost {
 		http.Error(w, "use POST", http.StatusMethodNotAllowed)
 		return false
 	}
-	// A magic-link nonce and a session token are both small; anything larger is
-	// someone else's problem, not a login.
+	// Nonces and tokens are small; anything larger is not a login.
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(v); err != nil {
 		denied(w)
 		return false
@@ -90,7 +84,7 @@ func denied(w http.ResponseWriter) {
 
 func writeSession(w http.ResponseWriter, token string, expiresIn int) {
 	w.Header().Set("Content-Type", "application/json")
-	// A session token is a credential: keep it out of every cache.
+	// A session token is a credential — keep it out of every cache.
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]any{

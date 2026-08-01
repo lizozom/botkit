@@ -99,7 +99,7 @@ b := bot.New(bot.Config{
     SessionDBPath: "/data/whatsapp_session.db",
     BotPhone:      cfg.Phone,          // for manual pairing only
     ManagedGroups: cfg.ManagedGroups,  // fail-closed JID whitelist (required, §8)
-    ServiceName:   "travel-expenses", // labels telemetry; OTLP endpoint comes from env
+    ServiceName:   "travel-expenses", // labels telemetry (see §15 — no OTLP knob yet)
     OpsAddr:       ":8080",            // ops API + webauth redeem (localhost only)
     OpsToken:      cfg.PairToken,      // bearer for ops API
     AcceptMedia:   true,               // deliver media to OnMessage (default false)
@@ -392,6 +392,11 @@ app's source of truth.
 
 ## 15. Open / deferred
 
+- **OTLP endpoint config.** This spec has always shown an `OTLP:` field on `bot.Config`;
+  it was never implemented. `bot.Config` exposes only `ServiceName`/`ServiceVersion`, and
+  `telemetry.Init` reads the endpoint from `OTEL_EXPORTER_OTLP_ENDPOINT` in the environment.
+  Open: add the config knob so an app can set it in code, or delete it from the spec and
+  declare env-only the intended contract.
 - Telegram transport (the handler API is already transport-neutral to accommodate it).
 - Tier-2 `SendDM` and tier-3 proactive sending — only if a consumer needs them, and only
   through the guardrails in §7.

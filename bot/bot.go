@@ -72,7 +72,7 @@ func New(cfg Config) (*Bot, error) {
 			return nil, err
 		}
 		if cfg.OpsAddr == "" {
-			return nil, errors.New("bot: WebAuth needs OpsAddr set — its endpoints are served on the ops port")
+			return nil, errors.New("bot: WebAuth needs OpsAddr — its endpoints ride on the ops port")
 		}
 	}
 	return &Bot{cfg: cfg, groups: groups}, nil
@@ -186,11 +186,11 @@ func (b *Bot) Run(ctx context.Context) error {
 	return nil
 }
 
-// opsHandler composes the two private APIs onto the single ops port. Pairing
-// takes the catch-all so its existing routes are unchanged; webauth claims the
-// longer /webauth/ prefix, which ServeMux gives precedence. Each API keeps its
-// own bearer token — the pairing token must not open a dashboard session, nor
-// the reverse. A nil webauth handler simply leaves those routes unmounted.
+// opsHandler composes both private APIs onto the single ops port. Pairing takes
+// the catch-all so its routes are unchanged; webauth claims the longer
+// /webauth/ prefix, which ServeMux prefers. Each keeps its own bearer token —
+// the pairing token must not open a dashboard session, nor the reverse. A nil
+// webauth handler leaves those routes unmounted.
 func opsHandler(pairing, webauth http.Handler) http.Handler {
 	if webauth == nil {
 		return pairing

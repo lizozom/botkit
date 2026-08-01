@@ -1,10 +1,8 @@
 "use client";
 
-// The harness: a stand-in for the WhatsApp group.
-//
-// "Type dashboard" calls the devserver's /dev/mint, which is exactly what a
-// bot's OnGroupMessage handler would do. Add/Remove edits the fake membership,
-// which is what the real IsMember would be reading from WhatsApp.
+// The harness: a stand-in for the WhatsApp group. "Type dashboard" calls
+// /dev/mint, which is what a bot's OnGroupMessage handler would do. Add/Remove
+// edits the membership the real IsMember would read from WhatsApp.
 
 import { useCallback, useEffect, useState } from "react";
 

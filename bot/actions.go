@@ -26,8 +26,8 @@ type Group = transport.GroupSummary
 // a nil transport by design.
 
 // WebAuth returns the dashboard-login minter, or nil when Config.WebAuth was
-// not set. Call MintLink on it from a message handler to hand a group member a
-// magic link — see ../docs/webauth.md. Valid once the bot is running.
+// not set. Call MintLink from a message handler to hand a member a magic link
+// (../docs/webauth.md). Valid once the bot is running.
 func (b *Bot) WebAuth() *webauth.Auth { return b.wa }
 
 // ManagedGroups returns the configured managed group JIDs. Empty in AllGroups

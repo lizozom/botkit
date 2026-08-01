@@ -364,11 +364,10 @@ func selfIsAdmin(info *types.GroupInfo, self, selfLID types.JID) bool {
 	return false
 }
 
-// sameJID reports whether two JIDs name the same identity: both halves must
-// match, never the User alone. Phone numbers and LIDs are unrelated numeric
-// namespaces, so a User-only comparison lets one person's LID collide with
-// another's phone number. Every identity decision in this package — self
-// detection, membership — goes through here.
+// sameJID reports whether two JIDs name the same identity. Both halves must
+// match, never the User alone: phone numbers and LIDs are unrelated numeric
+// namespaces, so one person's LID can collide with another's phone number.
+// Every identity decision in this package goes through here.
 func sameJID(a, b types.JID) bool {
 	return !a.IsEmpty() && !b.IsEmpty() && a.User == b.User && a.Server == b.Server
 }

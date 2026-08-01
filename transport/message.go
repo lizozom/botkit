@@ -72,18 +72,14 @@ func (c *Client) DownloadAny(ctx context.Context, msg *waE2E.Message) ([]byte, e
 	return c.wm.DownloadAny(ctx, msg)
 }
 
-// IsMember reports whether member is a participant of group right now. This is
-// webauth's authorization check — a dashboard login lives or dies on it — so it
-// always asks WhatsApp rather than trusting anything cached.
+// IsMember reports whether member is a participant of group right now. It is
+// webauth's authorization check, so it always asks WhatsApp — never a cache.
 //
-// Matching spans both identity namespaces. WhatsApp addresses the same person
-// as a phone JID or as a LID depending on the group's privacy mode, and an
-// inbound message carries whichever form that group uses, so the member JID is
-// compared against each of a participant's forms via sameJID (User AND Server —
-// see its comment for why the Server half is load-bearing). The phone fallback
-// below covers the case where the two sides know the person under different
-// forms and the LID map can bridge them; it is gated on a successful resolution
-// on both sides so that two unresolvable identities never compare equal.
+// WhatsApp addresses the same person as a phone JID or a LID depending on the
+// group's privacy mode, so member is compared against each of a participant's
+// forms via sameJID. The phone fallback bridges the case where the two sides
+// know the person under different forms; it requires a successful resolution on
+// both sides, so two unresolvable identities never compare equal.
 func (c *Client) IsMember(ctx context.Context, group, member types.JID) (bool, error) {
 	if group.IsEmpty() || member.IsEmpty() || member.User == "" {
 		return false, nil
@@ -104,7 +100,7 @@ func (c *Client) IsMember(ctx context.Context, group, member types.JID) (bool, e
 			return true, nil
 		}
 		if wantPhone == "" {
-			continue // member's phone is unknown; JID forms above were the only chance
+			continue // phone unknown; the JID forms above were the only chance
 		}
 		phone := p.PhoneNumber.User
 		if phone == "" {

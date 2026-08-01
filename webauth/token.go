@@ -10,9 +10,9 @@ import (
 	"strings"
 )
 
-// Claims is a session token's payload. Sessions are group-scoped: a token
-// proves "a current member of Group", so a bot managing several groups must
-// key dashboard data on Group rather than assume one session sees everything.
+// Claims is a session token's payload. Sessions are group-scoped: a token proves
+// "a current member of Group", so a multi-group bot must key dashboard data on
+// Group rather than assume one session sees everything.
 type Claims struct {
 	Group    string `json:"grp"`
 	Member   string `json:"mbr"`
@@ -21,8 +21,7 @@ type Claims struct {
 	Absolute int64  `json:"abs"` // first login + SessionTTL; never extended
 }
 
-// jwtHeader is the fixed HS256 header. Tokens are ordinary JWTs so the
-// dashboard can verify them with any off-the-shelf library.
+// jwtHeader is fixed. Tokens are ordinary JWTs, verifiable with any library.
 const jwtHeader = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" // {"alg":"HS256","typ":"JWT"}
 
 func (a *Auth) sign(c Claims) (string, error) {
@@ -34,13 +33,12 @@ func (a *Auth) sign(c Claims) (string, error) {
 	return body + "." + base64.RawURLEncoding.EncodeToString(a.mac(body)), nil
 }
 
-// parse verifies a token's signature and decodes its claims. It does not check
-// expiry — callers apply the time rules they need, since Refresh must accept a
-// token whose exp has already passed.
+// parse verifies the signature and decodes claims. It does not check expiry —
+// Refresh must accept a token whose exp has passed.
 //
-// The algorithm is never read from the header. A token is valid only if it is
-// byte-identical to what this key would have produced, which is what makes the
-// "alg": "none" and algorithm-confusion families structurally impossible here.
+// The algorithm is never read from the header; a token is valid only if it
+// matches what this key produces. That makes "alg": "none" and algorithm
+// confusion structurally impossible.
 func (a *Auth) parse(token string) (Claims, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {

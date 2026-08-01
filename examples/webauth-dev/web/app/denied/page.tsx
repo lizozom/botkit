@@ -1,9 +1,7 @@
-// Every rejection lands here: expired link, already-redeemed link, not a group
-// member, tampered cookie, session past its ceiling.
-//
-// It says nothing about which. The bot returns one opaque 403 for all of them
-// so the endpoints cannot be probed to learn who is in a group, and a page that
-// spelled out the reason would give that away again.
+// Every rejection lands here — expired, already redeemed, not a member,
+// tampered cookie, past the ceiling — and says nothing about which. The bot
+// returns one opaque 403 for all of them so the endpoints cannot be probed;
+// a page that spelled out the reason would give that away again.
 
 export default function Denied() {
   return (

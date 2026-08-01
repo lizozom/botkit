@@ -56,10 +56,9 @@ func (k *KV) Set(ctx context.Context, key, value string) error {
 	return nil
 }
 
-// Consume atomically reads and removes a key, reporting whether it was there.
-// Exactly one concurrent caller can observe ok=true for a given key — that
-// guarantee is what makes a webauth magic link single-use, so this must never
-// be relaxed into a Get followed by a Delete.
+// Consume atomically reads and removes a key. Exactly one concurrent caller
+// sees ok=true — the guarantee that makes a webauth magic link single-use, so
+// never relax this into a Get followed by a Delete.
 func (k *KV) Consume(ctx context.Context, key string) (string, bool, error) {
 	var v string
 	err := k.db.QueryRowContext(ctx,
@@ -81,15 +80,13 @@ func (k *KV) Delete(ctx context.Context, key string) error {
 	return nil
 }
 
-// DeleteExpired removes every key under prefix whose last write is older than
-// age, returning how many went. Without it, keys with a natural lifetime —
-// webauth nonces that are minted far more often than they are redeemed — would
-// accumulate in the KV forever.
+// DeleteExpired removes every key under prefix last written more than age ago,
+// returning how many went. Without it, keys with a natural lifetime — webauth
+// nonces, minted far more often than redeemed — accumulate forever.
 //
-// Resolution is one second: updated_at is a SQLite datetime, so a sub-second
-// age cannot be expressed and rounds to zero. This is a garbage collector for
-// values whose real lifetimes are minutes; anything needing finer expiry must
-// carry its own timestamp and check it on read (webauth does both).
+// Resolution is one second (updated_at is a SQLite datetime), so this is a GC
+// for lifetimes measured in minutes. Anything needing finer expiry carries its
+// own timestamp and checks it on read, as webauth does.
 func (k *KV) DeleteExpired(ctx context.Context, prefix string, age time.Duration) (int64, error) {
 	cutoff := fmt.Sprintf("-%d seconds", int64(age.Seconds()))
 	res, err := k.db.ExecContext(ctx,
@@ -100,7 +97,7 @@ func (k *KV) DeleteExpired(ctx context.Context, prefix string, age time.Duration
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
-		return 0, nil // the delete succeeded; the count is a nicety
+		return 0, nil // delete succeeded; the count is a nicety
 	}
 	return n, nil
 }

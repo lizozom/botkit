@@ -1,20 +1,16 @@
 // Command devserver runs botkit's real webauth endpoints against a fake group,
-// so the dashboard side of the flow can be built and tested without pairing a
-// WhatsApp number.
+// so the dashboard can be built and tested without pairing a WhatsApp number.
 //
-// Everything security-critical is the real thing: the same Auth, the same
-// nonce store, the same /webauth/redeem and /webauth/refresh handlers, the same
-// token signing. Only the membership source is swapped — instead of asking
-// WhatsApp who is in the group, it reads an in-memory set you control from the
-// harness UI. That is the one substitution, and it is the point: it lets you
-// remove someone from "the group" and watch the dashboard log them out.
+// Everything security-critical is real: same Auth, same nonce store, same
+// handlers, same signing. Only the membership source is swapped for an
+// in-memory set — which is the point, since it lets you remove someone from
+// "the group" and watch the dashboard log them out.
 //
-// The extra /dev/* routes stand in for a WhatsApp group: /dev/mint is someone
-// typing "dashboard", /dev/members edits the membership. They exist only here,
-// never in botkit itself.
+// The /dev/* routes stand in for WhatsApp: /dev/mint is someone typing
+// "dashboard", /dev/members edits the group. They exist only here.
 //
-// NOT FOR PRODUCTION. It ships fixed dev secrets and an unauthenticated
-// control API that mints a session for anyone who asks. Localhost only.
+// NOT FOR PRODUCTION: fixed dev secrets, and an unauthenticated control API
+// that mints a session for anyone who asks. Localhost only.
 package main
 
 import (
@@ -33,8 +29,7 @@ import (
 	"go.mau.fi/whatsmeow/types"
 )
 
-// Fixed dev values so the Next.js app can hardcode them in .env.local. Real
-// deployments generate these; see ../../docs/webauth.md.
+// Fixed so the Next.js app can hardcode them. Real deployments generate these.
 const (
 	devAPIToken   = "dev-api-token-not-a-secret"
 	devSigningKey = "dev-signing-key-not-a-secret"
@@ -43,8 +38,7 @@ const (
 // devGroup stands in for a managed WhatsApp group.
 var devGroup = types.JID{User: "120363000000000000", Server: types.GroupServer}
 
-// fakeGroup is the membership source: an in-memory set instead of a live
-// WhatsApp query. Satisfies webauth.Membership.
+// fakeGroup is the membership source: an in-memory set, not a WhatsApp query.
 type fakeGroup struct {
 	mu      sync.RWMutex
 	members map[string]string // JID string -> display name
@@ -83,9 +77,8 @@ func (f *fakeGroup) remove(jid string) {
 func main() {
 	addr := flag.String("addr", "127.0.0.1:8080", "listen address (keep it on localhost)")
 	dashboard := flag.String("dashboard", "http://localhost:3000", "dashboard base URL for magic links")
-	// Production defaults are minutes and hours, which makes the expiry paths
-	// untestable by hand. Shrink them to seconds to watch a link go stale, or a
-	// removed member get logged out, without waiting an hour.
+	// Production defaults are minutes and hours. Shrink to seconds to watch a
+	// link go stale, or a removed member get logged out, without the wait.
 	linkTTL := flag.Duration("link-ttl", webauth.DefaultLinkTTL, "how long a magic link stays redeemable")
 	recheck := flag.Duration("recheck", webauth.DefaultRecheckInterval, "session token lifetime — how often membership is re-checked")
 	sessionTTL := flag.Duration("session-ttl", webauth.DefaultSessionTTL, "absolute ceiling on one login")
@@ -187,8 +180,8 @@ func main() {
 	}
 }
 
-// cors lets the harness page call /dev/* straight from the browser. Dev-only:
-// the production endpoints are reached server-side and need no CORS at all.
+// cors lets the harness page call /dev/* from the browser. Dev-only — the real
+// endpoints are reached server-side and need no CORS.
 func cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")

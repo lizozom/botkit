@@ -1,9 +1,8 @@
 // Per-request session check for /dashboard.
 //
-// The common path is local: verify the cookie's signature with the shared key,
-// no round-trip to the bot. Once an hour the token expires and this refreshes
-// it, which is the moment group membership gets re-checked — that hourly
-// re-check is what makes removal from the group actually log someone out.
+// The common path is local: verify the cookie with the shared key, no bot
+// round-trip. Once an hour the token expires and this refreshes it — the moment
+// membership is re-checked, and what makes removal actually log someone out.
 
 import { NextRequest, NextResponse } from "next/server";
 import { nowSeconds, verifyToken } from "./lib/token";
@@ -24,8 +23,8 @@ export async function middleware(req: NextRequest) {
   // Still inside the hour: nothing to do.
   if (claims.exp > nowSeconds()) return NextResponse.next();
 
-  // The hour is up. Ask the bot to re-check membership and re-mint. A rejection
-  // means they left the group or hit the 48h ceiling — either way, logged out.
+  // The hour is up: re-check membership and re-mint. A rejection means they
+  // left the group or hit the 48h ceiling — either way, logged out.
   let res: Response;
   try {
     res = await fetch(`${BOT}/webauth/refresh`, {

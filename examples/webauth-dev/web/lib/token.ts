@@ -1,10 +1,8 @@
-// HS256 verification via Web Crypto, so the harness needs no JWT dependency and
-// runs in the edge middleware runtime.
+// HS256 verification via Web Crypto: no JWT dependency, runs in edge middleware.
 //
-// A real dashboard would use a maintained library (jose, jsonwebtoken). This is
-// deliberately small so the mechanism stays visible: the token is trusted only
-// when its signature is byte-identical to what the shared key produces, and the
-// header's "alg" is never consulted to decide how to verify.
+// A real dashboard would use jose. This stays small so the mechanism is visible
+// — the token is trusted only when its signature matches what the shared key
+// produces, and the header's "alg" never decides how to verify.
 
 export type Claims = {
   grp: string; // group JID the session is scoped to
@@ -14,9 +12,8 @@ export type Claims = {
   abs: number; // absolute ceiling; never extended by a refresh
 };
 
-// Both helpers return a Uint8Array explicitly backed by an ArrayBuffer:
-// Web Crypto's BufferSource excludes SharedArrayBuffer-backed views, which is
-// what a bare Uint8Array widens to under TypeScript 5.7+.
+// Both helpers return a Uint8Array explicitly backed by an ArrayBuffer, which
+// Web Crypto's BufferSource requires under TypeScript 5.7+.
 
 function b64urlDecode(input: string): Uint8Array<ArrayBuffer> {
   const pad = input.length % 4 === 0 ? "" : "=".repeat(4 - (input.length % 4));
@@ -35,11 +32,9 @@ function utf8(s: string): Uint8Array<ArrayBuffer> {
 }
 
 /**
- * Verify a botkit session token. Returns its claims, or null if the signature
- * is wrong or the token is malformed.
- *
- * Expiry is NOT checked here — the caller decides, because the refresh path
- * must accept a token whose `exp` has already passed.
+ * Verify a botkit session token. Returns its claims, or null if malformed or
+ * wrongly signed. Expiry is not checked here — the refresh path must accept a
+ * token whose `exp` has passed.
  */
 export async function verifyToken(
   token: string,

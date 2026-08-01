@@ -1,8 +1,6 @@
-// The protected page. Reaching it at all means middleware.ts accepted the
-// cookie, so this only needs to read the claims to know who is looking.
-//
-// Note the session is group-scoped: a real dashboard must filter its data by
-// claims.grp rather than assume one login sees everything.
+// The protected page. Reaching it means middleware.ts accepted the cookie, so
+// this only reads the claims. Sessions are group-scoped: a real dashboard must
+// filter data by claims.grp rather than assume one login sees everything.
 
 import { cookies } from "next/headers";
 import { verifyToken, nowSeconds } from "../../lib/token";

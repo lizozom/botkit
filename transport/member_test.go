@@ -18,14 +18,14 @@ func TestSameJID(t *testing.T) {
 		a, b types.JID
 		want bool
 	}{
-		{"identical phone JIDs", jid("972546260906", types.DefaultUserServer), jid("972546260906", types.DefaultUserServer), true},
+		{"identical phone JIDs", jid("972500000001", types.DefaultUserServer), jid("972500000001", types.DefaultUserServer), true},
 		{"identical LIDs", jid("11223344", types.HiddenUserServer), jid("11223344", types.HiddenUserServer), true},
-		{"same digits, LID vs phone", jid("972546260906", types.HiddenUserServer), jid("972546260906", types.DefaultUserServer), false},
-		{"same digits, phone vs LID", jid("972546260906", types.DefaultUserServer), jid("972546260906", types.HiddenUserServer), false},
-		{"different users, same server", jid("972546260906", types.DefaultUserServer), jid("972500000000", types.DefaultUserServer), false},
+		{"same digits, LID vs phone", jid("972500000001", types.HiddenUserServer), jid("972500000001", types.DefaultUserServer), false},
+		{"same digits, phone vs LID", jid("972500000001", types.DefaultUserServer), jid("972500000001", types.HiddenUserServer), false},
+		{"different users, same server", jid("972500000001", types.DefaultUserServer), jid("972500000000", types.DefaultUserServer), false},
 		{"empty vs empty", types.JID{}, types.JID{}, false},
-		{"empty vs real", types.JID{}, jid("972546260906", types.DefaultUserServer), false},
-		{"real vs empty", jid("972546260906", types.DefaultUserServer), types.JID{}, false},
+		{"empty vs real", types.JID{}, jid("972500000001", types.DefaultUserServer), false},
+		{"real vs empty", jid("972500000001", types.DefaultUserServer), types.JID{}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

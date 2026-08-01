@@ -67,11 +67,11 @@ TOKEN="Authorization: Bearer dev-api-token-not-a-secret"
 
 curl -s $BOT/dev/members                                              # who is in the group
 LINK=$(curl -s -X POST $BOT/dev/mint \
-  -d '{"member":"972546260906@s.whatsapp.net"}' | jq -r .link)        # "types dashboard"
+  -d '{"member":"972500000001@s.whatsapp.net"}' | jq -r .link)        # "types dashboard"
 curl -s -X POST $BOT/webauth/redeem -H "$TOKEN" \
   -d "{\"nonce\":\"${LINK##*t=}\"}"                                   # session token
 curl -s -X POST $BOT/dev/members \
-  -d '{"jid":"972546260906@s.whatsapp.net","action":"remove"}'        # leaves the group
+  -d '{"jid":"972500000001@s.whatsapp.net","action":"remove"}'        # leaves the group
 ```
 
 Every rejection is an identical opaque 403 — expired, already used, and not-a-

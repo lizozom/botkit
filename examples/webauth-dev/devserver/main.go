@@ -86,8 +86,8 @@ func main() {
 
 	// Two people to play with: one in the group, one never in it.
 	group := &fakeGroup{members: map[string]string{
-		"972546260906@s.whatsapp.net": "Liza (member)",
-		"11223344@lid":                "LID-only member",
+		"972500000001@s.whatsapp.net": "Member A",
+		"11223344@lid":                "Member B (LID-only)",
 	}}
 
 	dir, err := os.MkdirTemp("", "webauth-dev")

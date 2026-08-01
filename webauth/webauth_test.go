@@ -16,7 +16,7 @@ import (
 
 var (
 	group   = types.JID{User: "12036", Server: types.GroupServer}
-	member  = types.JID{User: "972546260906", Server: types.DefaultUserServer}
+	member  = types.JID{User: "972500000001", Server: types.DefaultUserServer}
 	lidOnly = types.JID{User: "11223344", Server: types.HiddenUserServer}
 	other   = types.JID{User: "972500000000", Server: types.DefaultUserServer}
 )

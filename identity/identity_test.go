@@ -4,10 +4,10 @@ import "testing"
 
 func TestNormalize(t *testing.T) {
 	cases := map[string]string{
-		"054-626-0906":      "972546260906",
-		"+972546260906":     "972546260906",
-		"972546260906":      "972546260906",
-		"0546260906":        "972546260906",
+		"050-000-0001":      "972500000001",
+		"+972500000001":     "972500000001",
+		"972500000001":      "972500000001",
+		"0500000001":        "972500000001",
 		"":                  "",
 		"   ":               "",
 		"abc":               "",
@@ -24,7 +24,7 @@ func TestNormalizeCountryCodeOverride(t *testing.T) {
 	orig := DefaultCountryCode
 	defer func() { DefaultCountryCode = orig }()
 	DefaultCountryCode = "1"
-	if got := Normalize("0546260906"); got != "1546260906" {
-		t.Errorf("Normalize with CC=1 = %q, want 1546260906", got)
+	if got := Normalize("0500000001"); got != "1500000001" {
+		t.Errorf("Normalize with CC=1 = %q, want 1500000001", got)
 	}
 }

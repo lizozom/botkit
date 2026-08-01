@@ -153,7 +153,7 @@ func (c *Client) Pair(ctx context.Context, pairPhone string) (string, error) {
 		}
 	}()
 
-	// identity.Normalize accepts local forms (e.g. 0546260906); PairPhone needs
+	// identity.Normalize accepts local forms (e.g. 0500000001); PairPhone needs
 	// full international digits.
 	code, err := c.wm.PairPhone(ctx, identity.Normalize(pairPhone), true, whatsmeow.PairClientChrome, "Chrome (Linux)")
 	if err != nil {

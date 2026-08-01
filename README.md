@@ -12,6 +12,7 @@ fail-closed group gating).
 
 - **Design:** [`SPEC.md`](SPEC.md)
 - **Usage examples:** [`docs/examples.md`](docs/examples.md)
+- **Dashboard auth setup:** [`docs/webauth.md`](docs/webauth.md)
 
 ## Quick start
 
@@ -109,13 +110,32 @@ b.OnPairingLost(func(reason string) {
 })
 ```
 
-The membership-gated dashboard login (`webauth`) is Phase 3b, next. See
-[`docs/examples.md`](docs/examples.md) for the full envelope, DM policies, and
-the AMIT gatekeeper shape.
+The membership-gated dashboard login (`webauth`) is done: a member types
+`dashboard` in the group, the bot replies with a single-use magic link, and the
+dashboard is gated on live group membership — no signup, no passwords, no DM.
+See [`docs/webauth.md`](docs/webauth.md) to set it up, and
+[`examples/webauth-dev`](examples/webauth-dev) to try the whole flow without
+pairing a WhatsApp number.
+
+```go
+b.OnGroupMessage(func(ctx context.Context, msg bot.InboundMessage) error {
+	if strings.EqualFold(msg.Text, "dashboard") {
+		link, err := b.WebAuth().MintLink(ctx, msg.GroupJID, msg.SenderJID)
+		if err != nil {
+			return err
+		}
+		return msg.Reply(ctx, "Dashboard (15 min): "+link)
+	}
+	return nil
+})
+```
+
+See [`docs/examples.md`](docs/examples.md) for the full envelope, DM policies,
+and the AMIT gatekeeper shape.
 
 ## Status
 
-Design locked; implementation in progress.
+All packages implemented.
 
 | Package | Purpose | State |
 |---|---|---|
@@ -129,13 +149,14 @@ Design locked; implementation in progress.
 | `send` | `Reply` error taxonomy (`ErrBotWide`/`ErrPeerUnreachable`) | ✅ done (Phase 2) |
 | `gate` | fail-closed group whitelist | ✅ done (Phase 2) |
 | `schedule` | job kernel (jitter, daily idempotency) | ✅ done (Phase 3a) |
-| `webauth` | membership-gated dashboard auth | ⬜ Phase 3b |
+| `webauth` | membership-gated dashboard auth ([setup](docs/webauth.md)) | ✅ done (Phase 3b) |
 
 **Demo:** `cmd/hello` — a real reply bot in ~90 lines. Connects to WhatsApp
 (manual pairing), replies `pong` to `ping` in a managed group, and nudges
-member DMs back to the group. See `cmd/hello/.env.example`. Message handling
-(`OnGroupMessage`/`OnDirectMessage`, media envelope) is Phase 2; schedulers and
-dashboard auth are Phase 3.
+member DMs back to the group. See `cmd/hello/.env.example`.
+
+**Auth harness:** `examples/webauth-dev` — the dashboard-login flow end to end
+against a fake group, so it can be exercised without pairing a number.
 
 ## Develop
 

@@ -27,7 +27,7 @@ func main() {
         SessionDBPath: cfg.SessionDB,
         BotPhone:      cfg.Phone,          // manual pairing only
         ManagedGroups: cfg.ManagedGroups,  // fail-closed JID whitelist
-        OTLP:          cfg.OTLP,
+        ServiceName:   "travel-expenses",
         OpsAddr:       ":8080",
         OpsToken:      cfg.PairToken,
     })
@@ -78,7 +78,7 @@ func main() {
         SessionDBPath: cfg.SessionDB,
         BotPhone:      cfg.Phone,
         ManagedGroups: cfg.ManagedGroups,
-        OTLP:          cfg.OTLP,
+        ServiceName:   "travel-expenses",
         OpsAddr:       ":8080",
         OpsToken:      cfg.PairToken,
     })
@@ -188,22 +188,25 @@ func main() {
         SessionDBPath: cfg.SessionDB,
         BotPhone:      cfg.Phone,
         ManagedGroups: cfg.ManagedGroups,
-        OTLP:          cfg.OTLP,
+        ServiceName:   "travel-expenses",
         OpsAddr:       ":8080",
         OpsToken:      cfg.PairToken,
         AcceptMedia:   true, // ← deliver images/PDFs to OnMessage
         WebAuth: &webauth.Config{
-            LinkTTL:         15 * time.Minute,
-            LinkSingleUse:   true,
-            SessionTTL:      48 * time.Hour,
-            RecheckInterval: 1 * time.Hour,
+            DashboardURL: cfg.DashboardURL,
+            APIToken:     cfg.WebAuthAPIToken,
+            SigningKey:   cfg.WebAuthSigningKey,
+            // Timings default to 15m link / 48h session / 1h recheck.
         },
     })
 
     b.OnMessage(func(ctx context.Context, msg bot.InboundMessage) error {
         // 1. Dashboard login command — reactive, in-group, no DM.
         if strings.EqualFold(strings.TrimSpace(msg.Text), "dashboard") {
-            link := b.WebAuth().MintLink(ctx, msg.GroupID, msg.Member)
+            link, err := b.WebAuth().MintLink(ctx, msg.GroupJID, msg.SenderJID)
+            if err != nil {
+                return err
+            }
             return msg.Reply(ctx, "Dashboard (good for 15 min): "+link)
         }
 
@@ -291,7 +294,9 @@ b.OnMessage(func(ctx context.Context, msg bot.InboundMessage) error {
 ## Example 5 — the Next.js auth glue
 
 Everything security-critical lives in Go (`botkit/webauth`); this is all the dashboard writes.
-See [`../SPEC.md` §9](../SPEC.md) for the full flow.
+See [`webauth.md`](webauth.md) for setup and [`../SPEC.md` §9](../SPEC.md) for the design.
+A runnable version of both files, plus the hourly refresh, is in
+[`../examples/webauth-dev`](../examples/webauth-dev).
 
 ```ts
 // app/auth/route.ts — redeem the nonce, set the cookie
@@ -299,7 +304,7 @@ export async function GET(req: Request) {
   const nonce = new URL(req.url).searchParams.get("t");
   const res = await fetch("http://localhost:8080/webauth/redeem", {
     method: "POST",
-    headers: { authorization: `Bearer ${process.env.WEBAUTH_SECRET}` },
+    headers: { authorization: `Bearer ${process.env.WEBAUTH_API_TOKEN}` },
     body: JSON.stringify({ nonce }),
   });
   if (!res.ok) return Response.redirect("/denied"); // expired, used, or not a member
@@ -313,11 +318,15 @@ export async function GET(req: Request) {
 
 ```ts
 // middleware.ts — validate cookie locally each request (no bot round-trip)
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const token = req.cookies.get("session")?.value;
-  if (!token || !verifyJWT(token, process.env.WEBAUTH_SECRET)) {
-    return NextResponse.redirect(new URL("/denied", req.url));
-  }
+  const claims = token
+    ? await verifyToken(token, process.env.WEBAUTH_SIGNING_KEY!)
+    : null;
+  if (!claims) return NextResponse.redirect(new URL("/denied", req.url));
+
+  // Once an hour the token expires; POST /webauth/refresh re-checks live
+  // membership and re-mints. See webauth.md for that half.
   return NextResponse.next();
 }
 ```

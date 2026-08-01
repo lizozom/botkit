@@ -1,5 +1,6 @@
 # Local env / secrets
 .env
+.env.local
 *.env
 !.env.example
 
@@ -12,6 +13,11 @@
 /bin/
 *.test
 *.out
+
+# Node (examples/ ship small Next.js apps)
+node_modules/
+.next/
+next-env.d.ts
 
 # OS / editor
 .DS_Store

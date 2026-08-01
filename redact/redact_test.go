@@ -9,11 +9,11 @@ func TestPhone(t *testing.T) {
 	if got := Phone(""); got != "<empty>" {
 		t.Errorf("Phone(\"\") = %q, want <empty>", got)
 	}
-	got := Phone("972546260906")
+	got := Phone("972500000001")
 	if !strings.HasPrefix(got, "ph:") {
 		t.Errorf("Phone() = %q, want ph: prefix", got)
 	}
-	if got != Phone("972546260906") {
+	if got != Phone("972500000001") {
 		t.Error("Phone() not deterministic")
 	}
 	if len(got) != len("ph:")+8 {

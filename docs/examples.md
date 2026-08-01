@@ -27,7 +27,7 @@ func main() {
         SessionDBPath: cfg.SessionDB,
         BotPhone:      cfg.Phone,          // manual pairing only
         ManagedGroups: cfg.ManagedGroups,  // fail-closed JID whitelist
-        ServiceName:   "travel-expenses",
+        ServiceName:   cfg.ServiceName,
         OpsAddr:       ":8080",
         OpsToken:      cfg.PairToken,
     })
@@ -78,7 +78,7 @@ func main() {
         SessionDBPath: cfg.SessionDB,
         BotPhone:      cfg.Phone,
         ManagedGroups: cfg.ManagedGroups,
-        ServiceName:   "travel-expenses",
+        ServiceName:   "amit-gatekeeper",
         OpsAddr:       ":8080",
         OpsToken:      cfg.PairToken,
     })

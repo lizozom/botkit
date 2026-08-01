@@ -99,7 +99,7 @@ b := bot.New(bot.Config{
     SessionDBPath: "/data/whatsapp_session.db",
     BotPhone:      cfg.Phone,          // for manual pairing only
     ManagedGroups: cfg.ManagedGroups,  // fail-closed JID whitelist (required, §8)
-    ServiceName:   "travel-expenses", // labels telemetry (see §15 — no OTLP knob yet)
+    ServiceName:   cfg.ServiceName,    // labels telemetry (see §15 — no OTLP knob yet)
     OpsAddr:       ":8080",            // ops API + webauth redeem (localhost only)
     OpsToken:      cfg.PairToken,      // bearer for ops API
     AcceptMedia:   true,               // deliver media to OnMessage (default false)
@@ -392,11 +392,14 @@ app's source of truth.
 
 ## 15. Open / deferred
 
-- **OTLP endpoint config.** This spec has always shown an `OTLP:` field on `bot.Config`;
-  it was never implemented. `bot.Config` exposes only `ServiceName`/`ServiceVersion`, and
-  `telemetry.Init` reads the endpoint from `OTEL_EXPORTER_OTLP_ENDPOINT` in the environment.
-  Open: add the config knob so an app can set it in code, or delete it from the spec and
-  declare env-only the intended contract.
+- **Telemetry config is inert.** This spec has always shown an `OTLP:` field on `bot.Config`
+  that was never implemented. Worse, the two fields that do exist —
+  `Config.ServiceName`/`ServiceVersion` — are never read by anything: `bot` never calls
+  `telemetry.Init`, so an app must call it itself (as `cmd/hello` does) and pass the service
+  name directly. Setting them on `bot.Config` today does nothing. Open: either have `Run`
+  call `telemetry.Init` and give it an endpoint knob, or drop both fields and document
+  telemetry as wholly app-owned (`OTEL_EXPORTER_OTLP_ENDPOINT` + a direct `telemetry.Init`
+  call), which is what actually happens now.
 - Telegram transport (the handler API is already transport-neutral to accommodate it).
 - Tier-2 `SendDM` and tier-3 proactive sending — only if a consumer needs them, and only
   through the guardrails in §7.

@@ -18,6 +18,7 @@ import (
 	"github.com/lizozom/botkit/pairing"
 	"github.com/lizozom/botkit/store"
 	"github.com/lizozom/botkit/transport"
+	"github.com/lizozom/botkit/webauth"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
@@ -49,6 +50,8 @@ type Bot struct {
 	dmPolicy      DMPolicy
 	jobs          []scheduledJob
 	onPairingLost func(reason string)
+
+	wa *webauth.Auth // nil unless Config.WebAuth is set; built in Run
 }
 
 // New validates config and builds the bot. It does not touch the network —
@@ -61,6 +64,15 @@ func New(cfg Config) (*Bot, error) {
 		var err error
 		if groups, err = gate.ParseGroups(cfg.ManagedGroups); err != nil {
 			return nil, err
+		}
+	}
+	if cfg.WebAuth != nil {
+		// Fail here rather than at someone's first login attempt.
+		if err := cfg.WebAuth.Validate(); err != nil {
+			return nil, err
+		}
+		if cfg.OpsAddr == "" {
+			return nil, errors.New("bot: WebAuth needs OpsAddr set — its endpoints are served on the ops port")
 		}
 	}
 	return &Bot{cfg: cfg, groups: groups}, nil
@@ -96,8 +108,8 @@ func (b *Bot) Run(ctx context.Context) error {
 	b.tp = tp
 	tp.SetOnMessage(b.dispatch)
 
-	// Open the KV (scheduler idempotency, future webauth nonces) only if needed.
-	if len(b.jobs) > 0 {
+	// Open the KV (scheduler idempotency, webauth nonces) only if needed.
+	if len(b.jobs) > 0 || b.cfg.WebAuth != nil {
 		kvPath := filepath.Join(filepath.Dir(b.cfg.SessionDBPath), "botkit_state.db")
 		kv, err := store.NewKV(kvPath)
 		if err != nil {
@@ -133,7 +145,17 @@ func (b *Bot) Run(ctx context.Context) error {
 	var srv *http.Server
 	if b.cfg.OpsAddr != "" {
 		ops := pairing.New(b.cfg.OpsToken, &pairAdapter{tp: tp, phone: b.cfg.BotPhone, ctx: ctx})
-		srv = &http.Server{Addr: b.cfg.OpsAddr, Handler: ops.Handler()}
+
+		var waHandler http.Handler
+		if b.cfg.WebAuth != nil {
+			wa, err := webauth.New(*b.cfg.WebAuth, b.kv, tp)
+			if err != nil {
+				return err
+			}
+			b.wa = wa
+			waHandler = wa.Handler()
+		}
+		srv = &http.Server{Addr: b.cfg.OpsAddr, Handler: opsHandler(ops.Handler(), waHandler)}
 		go func() {
 			slog.Info("botkit: ops API listening (keep private)", slog.String("addr", b.cfg.OpsAddr))
 			if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -162,6 +184,21 @@ func (b *Bot) Run(ctx context.Context) error {
 	}
 	tp.Disconnect()
 	return nil
+}
+
+// opsHandler composes the two private APIs onto the single ops port. Pairing
+// takes the catch-all so its existing routes are unchanged; webauth claims the
+// longer /webauth/ prefix, which ServeMux gives precedence. Each API keeps its
+// own bearer token — the pairing token must not open a dashboard session, nor
+// the reverse. A nil webauth handler simply leaves those routes unmounted.
+func opsHandler(pairing, webauth http.Handler) http.Handler {
+	if webauth == nil {
+		return pairing
+	}
+	mux := http.NewServeMux()
+	mux.Handle("/", pairing)
+	mux.Handle("/webauth/", webauth)
+	return mux
 }
 
 func (b *Bot) dispatch(evt *events.Message) {
@@ -215,6 +252,7 @@ func (b *Bot) buildMessage(evt *events.Message, isDM bool) InboundMessage {
 		ID:          info.ID,
 		SenderName:  senderName(evt),
 		SenderPhone: b.tp.ResolvePhone(b.ctx, info.Sender),
+		SenderJID:   info.Sender,
 		Timestamp:   info.Timestamp,
 		IsDM:        isDM,
 		IsFromMe:    info.IsFromMe,
@@ -223,6 +261,7 @@ func (b *Bot) buildMessage(evt *events.Message, isDM bool) InboundMessage {
 	}
 	if !isDM {
 		m.GroupID = info.Chat.String()
+		m.GroupJID = info.Chat
 	}
 	chat := info.Chat
 	m.reply = func(ctx context.Context, text string) error {

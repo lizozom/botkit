@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"go.mau.fi/whatsmeow/proto/waE2E"
+	"go.mau.fi/whatsmeow/types"
 )
 
 // Kind classifies an inbound message's primary content.
@@ -33,9 +34,18 @@ type InboundMessage struct {
 	GroupID     string // "" for a DM
 	SenderPhone string // E.164 digits (no '+'); "" if unresolvable (LID-only)
 	SenderName  string
-	Timestamp   time.Time
-	IsDM        bool
-	IsFromMe    bool
+
+	// SenderJID and GroupJID are the typed identities behind SenderPhone and
+	// GroupID. Prefer them for any authorization decision (webauth membership,
+	// per-person state): unlike SenderPhone they are always populated, so
+	// LID-only participants — people whose phone the bot cannot see — are not
+	// silently locked out. GroupJID is the zero JID for a DM.
+	SenderJID types.JID
+	GroupJID  types.JID
+
+	Timestamp time.Time
+	IsDM      bool
+	IsFromMe  bool
 
 	Kind     Kind
 	Text     string // plain text AND captions, unified

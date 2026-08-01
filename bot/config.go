@@ -1,5 +1,7 @@
 package bot
 
+import "github.com/lizozom/botkit/webauth"
+
 // Config holds only framework-owned settings. Each app keeps its own domain
 // config (LLM keys, roster paths, …) in its own struct. See ../SPEC.md §5.
 type Config struct {
@@ -26,6 +28,12 @@ type Config struct {
 	OpsAddr string
 	// OpsToken is the bearer token guarding the ops API. Empty = API refuses all.
 	OpsToken string
+
+	// WebAuth, when non-nil, enables membership-gated dashboard login and
+	// mounts /webauth/redeem and /webauth/refresh on OpsAddr alongside the
+	// pairing routes. Reach it from handlers via Bot.WebAuth(). Nil disables
+	// the feature entirely. See ../docs/webauth.md.
+	WebAuth *webauth.Config
 
 	// AcceptMedia, when true, populates InboundMessage.Media (with a Download)
 	// for image/video/audio/document/sticker messages. Default false: text bots

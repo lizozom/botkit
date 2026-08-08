@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/lizozom/botkit/transport"
+	"github.com/lizozom/botkit/webauth"
 	"go.mau.fi/whatsmeow/types"
 )
 
@@ -23,6 +24,11 @@ type Group = transport.GroupSummary
 // carries its anti-abuse hygiene inside. They are valid once the bot is
 // connected (i.e. from within a running handler); calling before Run panics on
 // a nil transport by design.
+
+// WebAuth returns the dashboard-login minter, or nil when Config.WebAuth was
+// not set. Call MintLink from a message handler to hand a member a magic link
+// (../docs/webauth.md). Valid once the bot is running.
+func (b *Bot) WebAuth() *webauth.Auth { return b.wa }
 
 // ManagedGroups returns the configured managed group JIDs. Empty in AllGroups
 // mode (there is no finite list to enumerate).

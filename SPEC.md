@@ -99,7 +99,6 @@ b := bot.New(bot.Config{
     SessionDBPath: "/data/whatsapp_session.db",
     BotPhone:      cfg.Phone,          // for manual pairing only
     ManagedGroups: cfg.ManagedGroups,  // fail-closed JID whitelist (required, §8)
-    OTLP:          cfg.OTLP,           // OTEL endpoint; no-op if empty
     OpsAddr:       ":8080",            // ops API + webauth redeem (localhost only)
     OpsToken:      cfg.PairToken,      // bearer for ops API
     AcceptMedia:   true,               // deliver media to OnMessage (default false)
@@ -224,6 +223,12 @@ no business in — noisy, and a fast track to a ban.
 Replaces the old `personas.md` allowlist + DM-OTP flow. Authorization is **live group
 membership**, and login is an **in-group reply** (no DM → no non-reply send).
 
+What triggers a mint is the app's business: a keyword, a regex, or an LLM agent inferring the
+intent and calling `MintLink` as a tool. The trigger is never a security boundary — an agent
+talked into minting for the wrong person still produces a link that fails the live membership
+check at redeem. The one invariant is that minting stays **reactive** (§7): a link can only
+ride out on a reply to an inbound message.
+
 ### Flow
 
 ```
@@ -232,7 +237,7 @@ membership**, and login is an **in-group reply** (no DM → no non-reply send).
    │ OnMessage (reactive) ───────────────────────────────▶ webauth.MintLink(group, member)
    │                                                          • random single-use nonce
    │                                                          • store {nonce→group,member,exp}
-   │ ◀── Reply in group: "dashboard (15 min): …/auth#<nonce>"
+   │ ◀── Reply in group: "dashboard (15 min): …/auth?t=<nonce>"
  user taps link ─────────▶ GET /auth
                            POST localhost:8080/webauth/redeem {nonce} ─▶ webauth.Redeem
                                                                           • nonce live & unused?
@@ -241,8 +246,13 @@ membership**, and login is an **in-group reply** (no DM → no non-reply send).
                                                                           • yes → signed session token
                            ◀───────────────────────────────────────────── token (or 403)
                            Set-Cookie: session=<jwt> httpOnly; redirect
- every request: verify cookie locally (shared secret)
- hourly: re-check IsMember → left group ⇒ logged out
+ every request: verify cookie locally (shared signing key) — no bot round-trip
+ token expires hourly ───▶ POST /webauth/refresh {session} ─▶ webauth.Refresh
+                                                                • signature valid?
+                                                                • inside the 48h `abs` ceiling?
+                                                                • LIVE IsMember again?
+                           ◀───────────────────────────────── re-minted token (or 403)
+ left the group ⇒ that refresh fails ⇒ logged out within RecheckInterval
 ```
 
 ### Why it's safe enough (and where it deliberately isn't gold-plated)
@@ -255,22 +265,31 @@ membership**, and login is an **in-group reply** (no DM → no non-reply send).
 - Residual risk (a member forwarding the live link to an outsider within its short window) is
   proportionate for a private group's read-only view.
 
-### Config (all four knobs tunable per consumer)
+### Config (three required secrets, four tunable knobs)
 
 ```go
 webauth.Config{
+    DashboardURL: "https://dash.example.com", // base for magic links
+    APIToken:     "...",                       // bearer for /webauth/*
+    SigningKey:   "...",                       // HMAC key for session tokens
+
     LinkTTL:         15 * time.Minute, // redemption window for the URL
-    LinkSingleUse:   true,             // consumed on first redeem
-    SessionTTL:      48 * time.Hour,   // "revisit for a day or two" lives here
-    RecheckInterval: 1 * time.Hour,    // re-verify membership; removal revokes within this
+    LinkSingleUse:   nil,              // nil == true; consumed on first redeem
+    SessionTTL:      48 * time.Hour,   // absolute ceiling on one login
+    RecheckInterval: 1 * time.Hour,    // token lifetime; removal revokes within this
 }
 ```
 
 **Locked defaults:** tight single-use link (15 min) + configurable long session (default 48h)
 + hourly membership recheck. The "revisit tomorrow" experience is delivered by the **session**,
 not by keeping the link alive — the long-lived thing is an httpOnly cookie on the user's
-device, never a bearer token in chat history. A `LinkSingleUse: false` mode exists for those
-who want a literally-reusable link, documented as the looser choice.
+device, never a bearer token in chat history. `LinkSingleUse` is a `*bool` so its zero value
+means single-use: a config someone forgot to fill in must fail safe. Pointing it at `false`
+gives a literally-reusable link, the documented looser choice.
+
+`RecheckInterval` is the knob with a cost on both sides: it is simultaneously the revocation
+lag (how long a removed member keeps access) and the rate of live WhatsApp group queries (one
+per active user per interval). Shortening it tightens the first and multiplies the second.
 
 ### Boundary
 
@@ -280,9 +299,17 @@ who want a literally-reusable link, documented as the looser choice.
   sets the cookie, plus per-request cookie validation.
 - Fly routes public traffic to Next.js `:3000`; Next.js reaches the bot at `localhost:8080`,
   so `/webauth/redeem` is **never publicly reachable** — no brute-forcing.
-- Shared config: `WEBAUTH_SECRET` + `DASHBOARD_URL`, present in both processes.
-- Membership keys on the member's **resolved JID** (not raw phone), so LID-only participants
-  still authenticate.
+- Shared config: `WEBAUTH_API_TOKEN` + `WEBAUTH_SIGNING_KEY` + `DASHBOARD_URL`. The two
+  secrets are deliberately distinct — one leaked value must not both open the endpoints and
+  forge sessions — and `webauth.New` refuses a config where they are equal.
+- Membership keys on the member's **JID** (not raw phone), so LID-only participants still
+  authenticate — `InboundMessage.SenderPhone` is empty for exactly those people. Every JID
+  comparison requires User **and** Server to match, since phone numbers and LIDs are unrelated
+  numeric namespaces that would otherwise collide (see `transport.sameJID`).
+- Every rejection — expired nonce, replayed nonce, non-member, forged token — returns one
+  identical opaque 403. A distinguishable error would turn the endpoint into a membership
+  oracle. Reasons go to the bot's logs instead.
+- A failed membership query **denies**. An unreachable WhatsApp is never an open door.
 
 ## 10. Inbound message model
 
@@ -293,6 +320,7 @@ always exposes the untouched proto for the rest.
 ```go
 type InboundMessage struct {
     ID, GroupID, SenderPhone, SenderName string
+    SenderJID, GroupJID types.JID  // typed identities; prefer these for authorization
     Timestamp time.Time
     IsFromMe  bool
 
@@ -350,6 +378,8 @@ app's source of truth.
 
 - `telemetry.Init(ctx, service, version)` — OTLP-logs bootstrap, no-op when
   `OTEL_EXPORTER_OTLP_ENDPOINT` is unset. Extracted verbatim.
+- **The app calls `Init`**, not `bot.Run` — it owns its service name, its version, and the
+  shutdown flush. `bot.Config` therefore carries no telemetry fields at all.
 - **Event emission stays app-side** — nagger's ~20 typed events and AMIT's single `Audit`
   event are domain vocabularies, not framework concerns. `botkit` provides the transport and
   `redact` helpers; the app defines its events.
@@ -361,7 +391,9 @@ app's source of truth.
 - **Phase 1** — `transport` + `pairing` + ops API (from AMIT's `wa.Client` / `pairapi`).
 - **Phase 2** — `bot` orchestrator + `OnMessage` dispatch + `InboundMessage` + guarded
   `Reply` + `gate`.
-- **Phase 3** — `schedule` kernel + guarded action methods + `webauth`.
+- **Phase 3** — `schedule` kernel + guarded action methods + `webauth`. ✅ done; `webauth`
+  ships with a WhatsApp-free harness (`examples/webauth-dev`) that exercises the full
+  mint → redeem → refresh → revoke loop against a fake group.
 - **Then:** migrate AMIT onto `botkit` (lowest risk) → build travel-expenses on it.
 - **Phase 2 (future):** Telegram transport behind the same handler seam; then nudnik.
 
@@ -371,5 +403,9 @@ app's source of truth.
 - Tier-2 `SendDM` and tier-3 proactive sending — only if a consumer needs them, and only
   through the guardrails in §7.
 - Outbound media.
-- Whether `webauth`'s session token is a `botkit`-signed JWT the dashboard sets directly, or a
-  claim the dashboard re-mints — a Phase-3 implementation detail.
+- ~~Whether `webauth`'s session token is a `botkit`-signed JWT the dashboard sets directly, or a
+  claim the dashboard re-mints.~~ **Resolved:** a botkit-signed HS256 JWT the dashboard sets
+  directly and verifies locally. It carries `exp` at `RecheckInterval` (1h) and an unmoving
+  `abs` ceiling at `SessionTTL` (48h); `POST /webauth/refresh` re-checks live membership and
+  re-mints against the same ceiling. A stateless 48h token could not have delivered the
+  hourly revocation the section promises.

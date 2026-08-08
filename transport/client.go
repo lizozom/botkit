@@ -364,6 +364,14 @@ func selfIsAdmin(info *types.GroupInfo, self, selfLID types.JID) bool {
 	return false
 }
 
+// sameJID reports whether two JIDs name the same identity. Both halves must
+// match, never the User alone: phone numbers and LIDs are unrelated numeric
+// namespaces, so one person's LID can collide with another's phone number.
+// Every identity decision in this package goes through here.
+func sameJID(a, b types.JID) bool {
+	return !a.IsEmpty() && !b.IsEmpty() && a.User == b.User && a.Server == b.Server
+}
+
 // participantIsSelf matches the bot's own identity against a participant across
 // its phone/LID forms — the bot may be addressed either way, so both of the
 // bot's own forms are checked against each of the participant's forms.
@@ -375,9 +383,6 @@ func selfIsAdmin(info *types.GroupInfo, self, selfLID types.JID) bool {
 func participantIsSelf(p types.GroupParticipant, self, selfLID types.JID) bool {
 	if (self.IsEmpty() || self.User == "") && selfLID.IsEmpty() {
 		return false
-	}
-	sameJID := func(a, b types.JID) bool {
-		return !a.IsEmpty() && !b.IsEmpty() && a.User == b.User && a.Server == b.Server
 	}
 	switch {
 	case !self.IsEmpty() && sameJID(p.JID, self):

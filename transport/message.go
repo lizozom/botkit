@@ -2,6 +2,7 @@ package transport
 
 import (
 	"context"
+	"fmt"
 	"math/rand/v2"
 	"time"
 
@@ -69,6 +70,47 @@ func sleepCtx(ctx context.Context, d time.Duration) {
 // DownloadAny downloads whatever media a message carries, decrypting the blob.
 func (c *Client) DownloadAny(ctx context.Context, msg *waE2E.Message) ([]byte, error) {
 	return c.wm.DownloadAny(ctx, msg)
+}
+
+// IsMember reports whether member is a participant of group right now. It is
+// webauth's authorization check, so it always asks WhatsApp — never a cache.
+//
+// WhatsApp addresses the same person as a phone JID or a LID depending on the
+// group's privacy mode, so member is compared against each of a participant's
+// forms via sameJID. The phone fallback bridges the case where the two sides
+// know the person under different forms; it requires a successful resolution on
+// both sides, so two unresolvable identities never compare equal.
+func (c *Client) IsMember(ctx context.Context, group, member types.JID) (bool, error) {
+	if group.IsEmpty() || member.IsEmpty() || member.User == "" {
+		return false, nil
+	}
+	var info *types.GroupInfo
+	err := c.withRateRetry(ctx, func() error {
+		var e error
+		info, e = c.wm.GetGroupInfo(ctx, group)
+		return e
+	})
+	if err != nil {
+		return false, fmt.Errorf("get group info: %w", err)
+	}
+
+	wantPhone := identity.Normalize(c.ResolvePhone(ctx, member))
+	for _, p := range info.Participants {
+		if sameJID(p.JID, member) || sameJID(p.PhoneNumber, member) || sameJID(p.LID, member) {
+			return true, nil
+		}
+		if wantPhone == "" {
+			continue // phone unknown; the JID forms above were the only chance
+		}
+		phone := p.PhoneNumber.User
+		if phone == "" {
+			phone = c.ResolvePhone(ctx, p.JID)
+		}
+		if phone != "" && identity.Normalize(phone) == wantPhone {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // IsMemberOfAny reports whether phone is a current participant of any of the

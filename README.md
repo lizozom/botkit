@@ -90,6 +90,36 @@ b.OnGroupMessage(func(ctx context.Context, msg bot.InboundMessage) error {
 })
 ```
 
+Forwarding a subset of a group's photos to **one** chat you own — a kindergarten
+photo filter, say — is the relay tier (`SPEC.md` §7.1). Set `RelayTarget` once;
+handlers then choose *whether* to forward, never *where*:
+
+```go
+b, _ := bot.New(bot.Config{
+	// ...
+	AcceptMedia: true,
+	RelayTarget: os.Getenv("RELAY_TARGET"), // one JID, fixed for the process
+})
+
+b.OnGroupMessage(func(ctx context.Context, msg bot.InboundMessage) error {
+	if msg.Kind != bot.KindImage {
+		return nil
+	}
+	blob, err := msg.Media.Download(ctx)
+	if err != nil {
+		return err
+	}
+	if !isMyKid(blob) { // your matcher
+		return nil
+	}
+	return msg.Relay(ctx, bot.OutboundMedia{Data: blob, MIME: msg.Media.MIME}, "found your kid 📸")
+})
+```
+
+`Relay` has no recipient parameter by design — it cannot become a broadcast. It carries
+a jittered pause, a per-day cap (`RelayDailyCap`, default 200 → `ErrRelayCapReached`),
+and a halt latch that closes the relay on the first `ErrBotWide` until reconnect.
+
 Scheduled jobs are available via `OnSchedule` (join-request gatekeeper, audits,
 syncs) — `Every` / `EveryJittered` / `DailyAt`, jittered + staggered + connected-
 gated, with once-per-day idempotency across restarts:
@@ -146,7 +176,7 @@ All packages implemented.
 | `pairing` | manual pair flow + ops API (`/pair`,`/status`,`/groups`) | ✅ done (Phase 1) |
 | `store` | session-DB open + metadata KV | ✅ done (`OpenSQLite`, `KV`) |
 | `bot` | orchestrator, `OnGroupMessage`/`OnDirectMessage`, envelope | ✅ done (Phase 2) |
-| `send` | `Reply` error taxonomy (`ErrBotWide`/`ErrPeerUnreachable`) | ✅ done (Phase 2) |
+| `send` | `Reply`/`Relay` error taxonomy (`ErrBotWide`/`ErrPeerUnreachable`) | ✅ done (Phase 2) |
 | `gate` | fail-closed group whitelist | ✅ done (Phase 2) |
 | `schedule` | job kernel (jitter, daily idempotency) | ✅ done (Phase 3a) |
 | `webauth` | membership-gated dashboard auth ([setup](docs/webauth.md)) | ✅ done (Phase 3b) |

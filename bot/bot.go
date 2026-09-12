@@ -9,8 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -45,6 +47,9 @@ type Bot struct {
 	kv     *store.KV
 	ctx    context.Context
 
+	relayTarget types.JID
+	relayLimit  *relayLimiter
+
 	onGroup       Handler
 	onDM          Handler
 	dmPolicy      DMPolicy
@@ -75,7 +80,28 @@ func New(cfg Config) (*Bot, error) {
 			return nil, errors.New("bot: WebAuth needs OpsAddr — its endpoints ride on the ops port")
 		}
 	}
-	return &Bot{cfg: cfg, groups: groups}, nil
+	b := &Bot{cfg: cfg, groups: groups}
+
+	if t := strings.TrimSpace(cfg.RelayTarget); t != "" {
+		jid, err := types.ParseJID(t)
+		if err != nil {
+			return nil, fmt.Errorf("bad relay target %q: %w", t, err)
+		}
+		if jid.User == "" {
+			return nil, fmt.Errorf("bad relay target %q: no recipient", t)
+		}
+		b.relayTarget = jid
+	}
+	capacity := cfg.RelayDailyCap
+	switch {
+	case capacity == 0:
+		capacity = DefaultRelayDailyCap
+	case capacity < 0:
+		capacity = math.MaxInt // explicitly uncapped
+	}
+	b.relayLimit = &relayLimiter{cap: capacity}
+
+	return b, nil
 }
 
 // OnGroupMessage registers the handler for messages in managed groups.
@@ -123,6 +149,7 @@ func (b *Bot) Run(ctx context.Context) error {
 	var startOnce sync.Once
 	tp.SetOnConnected(func() {
 		slog.Info("botkit: connected", slog.String("self", tp.SelfJID().String()))
+		b.relayLimit.resume() // a reconnect clears the bot-wide relay halt
 		if len(b.jobs) > 0 {
 			startOnce.Do(func() { b.startJobs(ctx) })
 		}
@@ -266,6 +293,9 @@ func (b *Bot) buildMessage(evt *events.Message, isDM bool) InboundMessage {
 	chat := info.Chat
 	m.reply = func(ctx context.Context, text string) error {
 		return b.tp.SendText(ctx, chat, text)
+	}
+	if !b.relayTarget.IsEmpty() {
+		m.relay = b.relay
 	}
 
 	inner, viewOnce := unwrapViewOnce(evt.Message)

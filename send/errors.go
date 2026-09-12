@@ -1,6 +1,8 @@
-// Package send holds the outbound-error taxonomy for botkit. v1 ships only the
-// reactive Reply (a method on bot.InboundMessage) — there is deliberately no
-// raw Send primitive. See ../SPEC.md section 7.
+// Package send holds the outbound-error taxonomy for botkit. v1 ships two
+// sends, both methods on bot.InboundMessage and both bound to an inbound
+// message: the reactive Reply, and Relay (tier 1.5) which forwards media to one
+// destination fixed in config. There is deliberately no raw Send primitive.
+// See ../SPEC.md section 7.
 //
 // Classify sorts a whatsmeow send error into two buckets so a scheduler (or the
 // caller) can tell a per-peer problem apart from a bot-wide outage:

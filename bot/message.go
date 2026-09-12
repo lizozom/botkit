@@ -58,6 +58,7 @@ type InboundMessage struct {
 	Raw *waE2E.Message // escape hatch — always present
 
 	reply func(ctx context.Context, text string) error
+	relay func(ctx context.Context, media OutboundMedia, caption string) error
 }
 
 var errNoReply = errors.New("reply unavailable on this message")
@@ -69,6 +70,23 @@ func (m InboundMessage) Reply(ctx context.Context, text string) error {
 		return errNoReply
 	}
 	return m.reply(ctx, text)
+}
+
+// Relay forwards media to the bot's single configured RelayTarget (SPEC §7,
+// tier 1.5). Like Reply it hangs off an inbound message, so it cannot fire
+// un-prompted; unlike Reply it lands in a different chat than the one the
+// message came from. That is the whole of the extra power: one inbound, at
+// most one outbound, to one destination fixed at boot.
+//
+// Returns ErrRelayDisabled when Config.RelayTarget is unset, and
+// ErrRelayCapReached once the day's budget is spent. Blocks for seconds
+// (upload plus a jittered pause) — handlers already run off the socket
+// goroutine, so this is safe, but don't call it in a tight loop.
+func (m InboundMessage) Relay(ctx context.Context, media OutboundMedia, caption string) error {
+	if m.relay == nil {
+		return ErrRelayDisabled
+	}
+	return m.relay(ctx, media, caption)
 }
 
 // Media describes a downloadable attachment.

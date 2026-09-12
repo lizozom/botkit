@@ -35,6 +35,20 @@ type Config struct {
 	// the feature entirely. See ../docs/webauth.md.
 	WebAuth *webauth.Config
 
+	// RelayTarget is the single destination for relayed media (SPEC §7,
+	// tier 1.5): a group, a contact, or the bot's own chat for a private feed.
+	// Empty disables relaying entirely — InboundMessage.Relay then returns
+	// ErrRelayDisabled.
+	//
+	// It is one fixed JID on purpose. Handlers choose WHETHER to relay an
+	// inbound message, never WHERE it goes, so the tier cannot become a
+	// broadcast primitive.
+	RelayTarget string
+
+	// RelayDailyCap bounds relayed sends per UTC day. Zero means
+	// DefaultRelayDailyCap; negative disables the cap (don't).
+	RelayDailyCap int
+
 	// AcceptMedia, when true, populates InboundMessage.Media (with a Download)
 	// for image/video/audio/document/sticker messages. Default false: text bots
 	// ignore media.

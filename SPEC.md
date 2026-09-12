@@ -190,19 +190,51 @@ alert a human instead of hand-polling the ops API's `/status`.
 ## 7. The send surface (the ban guardrail)
 
 Nagger died from proactive send **volume**. `botkit` makes that class of mistake structurally
-hard. There is a three-tier taxonomy; **only tier 1 is implemented in v1.**
+hard. There is a tiered taxonomy; **only tiers 1 and 1.5 are implemented in v1.**
 
 | Tier | Example | v1 status |
 |---|---|---|
 | **1. Reply** | answer a message in the group | **Implemented.** Bound to an inbound message, so it's reactive by construction. |
+| **1.5 Relay** | forward a matching photo to one fixed chat | **Implemented.** Bound to an inbound message like Reply, but lands in a different chat. Destination is config, not a parameter. |
 | **2. Transactional DM** | one-off OTP to someone who just asked | **Not built.** Obviated by the in-group magic-link auth (§9). |
 | **3. Proactive / broadcast** | digest, nag, farewell | **Not built.** When needed, must go through forced throttle + jitter + engagement-gating + per-day cap + `ErrBotWide` halt. |
 
 Consequences, on purpose:
-- **There is no `bot.Send(anyGroup, text)` primitive.** The only send is `msg.Reply`, which
-  cannot initiate an unsolicited message. No back door to fake a broadcast.
+- **There is no `bot.Send(anyGroup, text)` primitive.** The only sends are `msg.Reply` and
+  `msg.Relay`, both bound to an inbound message, so neither can initiate an unsolicited
+  message. No back door to fake a broadcast.
 - The `ErrPeerUnreachable` (per-group) vs `ErrBotWide` (session-wide) send-error taxonomy is
   lifted from nagger and available for when tier 3 is eventually built.
+
+### 7.1 The relay tier
+
+Tier 1.5 exists for one shape: an app that watches a managed group and forwards a
+*subset* of what it sees to the operator's own chat. The motivating case is a
+kindergarten photo filter — dozens of group photos a day, of which a parent wants only
+the ones containing their own child.
+
+`Reply` cannot express this (wrong chat, and text-only), but the case is nothing like
+tier 3 either: every outbound is caused 1:1 by an inbound, and there is exactly one
+destination for the life of the process.
+
+The guardrails are structural rather than advisory:
+
+- **The destination is `Config.RelayTarget`, never a call-site argument.** A handler
+  decides *whether* to relay, never *where*. `Relay(ctx, media, caption)` has no
+  recipient parameter, so no amount of handler code turns it into a fan-out.
+- **Bound to an inbound message**, exactly like `Reply` — `InboundMessage.Relay` cannot
+  be called out of nowhere.
+- **Per-day cap** (`RelayDailyCap`, default 200) returning `ErrRelayCapReached`. A
+  runaway matcher stops at a budget instead of emptying a group into someone's DMs.
+- **Jittered pause** of 1–4s before each send, so forty photos arriving at once do not
+  become forty simultaneous sends.
+- **Bot-wide halt latch**: the first `ErrBotWide` closes the relay until the socket
+  reconnects, rather than producing one failed send per inbound for the rest of the day.
+- **Images only.** Every additional media kind is additional send surface, and the tier
+  was built to forward photos.
+
+Empty `RelayTarget` disables the tier entirely; `Relay` then returns `ErrRelayDisabled`,
+so a bot that never configures it has no relay surface at all.
 
 ## 8. Group gating
 

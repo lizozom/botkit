@@ -129,6 +129,13 @@ func (c *Client) Pair(ctx context.Context, pairPhone string) (string, error) {
 		return "", fmt.Errorf("cannot pair: bot phone not set")
 	}
 
+	// A previous code that was never typed in leaves the unpaired socket open,
+	// and whatsmeow refuses a QR channel on a connected client. Drop it so a
+	// human can ask for a fresh code without restarting the bot.
+	if c.wm.IsConnected() {
+		c.wm.Disconnect()
+	}
+
 	// Phone pairing requires the websocket fully up before PairPhone's server
 	// IQ (else "info query returned status 400"). Register the QR channel BEFORE
 	// Connect (whatsmeow requirement) and use its first event purely as a
